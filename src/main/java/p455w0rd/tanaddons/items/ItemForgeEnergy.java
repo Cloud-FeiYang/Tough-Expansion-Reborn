@@ -1,239 +1,141 @@
 package p455w0rd.tanaddons.items;
 
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.energy.EnergyStorage;
+import net.minecraftforge.energy.IEnergyStorage;
+import p455w0rd.tanaddons.init.ModConfig;
+import p455w0rd.tanaddons.util.ReadableNumberConverter;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 
-import net.minecraft.creativetab.CreativeTabs;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.NonNullList;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.minecraftforge.common.util.Constants;
-import net.minecraftforge.energy.CapabilityEnergy;
-import net.minecraftforge.energy.IEnergyStorage;
-import p455w0rd.tanaddons.init.ModConfig.Options;
+public class ItemForgeEnergy extends Item {
 
-/**
- * @author p455w0rd
- *
- */
-public class ItemForgeEnergy extends ItemBase {
+    public static final String TAG_ENERGY = "Energy";
+    protected final int capacity;
+    protected final int maxReceive;
+    protected final int maxExtract;
 
-	protected int capacity;
-	protected int maxReceive;
-	protected int maxExtract;
+    public ItemForgeEnergy(int capacity, int maxReceive, int maxExtract) {
+        super(new Item.Properties().stacksTo(1));
+        this.capacity = capacity;
+        this.maxReceive = maxReceive;
+        this.maxExtract = maxExtract;
+    }
 
-	public ItemForgeEnergy(int capacity, String name) {
-		this(capacity, capacity, capacity, name);
-	}
+    public int getEnergyCapacity() {
+        return capacity;
+    }
 
-	public ItemForgeEnergy(int capacity, int maxTransfer, String name) {
-		this(capacity, maxTransfer, maxTransfer, name);
-	}
+    public int getEnergyStored(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null ? tag.getInt(TAG_ENERGY) : 0;
+    }
 
-	public ItemForgeEnergy(int capacity, int maxReceive, int maxExtract, String name) {
-		super(name);
-		this.capacity = capacity;
-		this.maxReceive = maxReceive;
-		this.maxExtract = maxExtract;
-		canRepair = false;
-		setMaxStackSize(1);
-	}
+    public void setEnergyStored(ItemStack stack, int energy) {
+        int clamped = Math.max(0, Math.min(capacity, energy));
+        stack.getOrCreateTag().putInt(TAG_ENERGY, clamped);
+    }
 
-	@Override
-	public void getSubItems(CreativeTabs tab, NonNullList<ItemStack> subItems) {
-		if (isInCreativeTab(tab)) {
-			subItems.add(new ItemStack(this));
-			if (Options.REQUIRE_ENERGY) {
-				ItemStack item = new ItemStack(this);
-				setFullEnergy(item);
-				subItems.add(item);
-			}
-		}
-	}
+    public int receiveEnergy(ItemStack stack, int maxReceive, boolean simulate) {
+        int stored = getEnergyStored(stack);
+        int energyReceived = Math.min(capacity - stored, Math.min(this.maxReceive, maxReceive));
+        if (!simulate && energyReceived > 0) {
+            setEnergyStored(stack, stored + energyReceived);
+        }
+        return energyReceived;
+    }
 
-	@Override
-	public boolean showDurabilityBar(ItemStack stack) {
-		return Options.REQUIRE_ENERGY;
-	}
+    public int extractEnergy(ItemStack stack, int maxExtract, boolean simulate) {
+        int stored = getEnergyStored(stack);
+        int energyExtracted = Math.min(stored, Math.min(this.maxExtract, maxExtract));
+        if (!simulate && energyExtracted > 0) {
+            setEnergyStored(stack, stored - energyExtracted);
+        }
+        return energyExtracted;
+    }
 
-	@Override
-	public double getDurabilityForDisplay(ItemStack stack) {
-		if (!Options.REQUIRE_ENERGY) {
-			return 0;
-		}
-		double max = getMaxEnergyStored(stack);
-		return (max - getEnergyStored(stack)) / max;
-	}
+    @Override
+    public boolean isBarVisible(ItemStack stack) {
+        return ModConfig.COMMON.requireEnergy.get();
+    }
 
-	@Override
-	public ICapabilityProvider initCapabilities(@Nonnull final ItemStack stack, @Nullable NBTTagCompound nbt) {
-		return getEnergyProvider(stack);
-	}
+    @Override
+    public int getBarWidth(ItemStack stack) {
+        return Math.round(13.0F * (float) getEnergyStored(stack) / (float) capacity);
+    }
 
-	public static ICapabilityProvider getEnergyProvider(ItemStack stack) {
-		return stack.getItem() instanceof ItemForgeEnergy ? ((ItemForgeEnergy) stack.getItem()).getForgeEnergyStorage(stack) : null;
-	}
+    @Override
+    public int getBarColor(ItemStack stack) {
+        float f = Math.max(0.0F, (float) getEnergyStored(stack) / (float) capacity);
+        return Mth.hsvToRgb(f / 3.0F, 1.0F, 1.0F);
+    }
 
-	public EnergyStorageSettable getForgeEnergyStorage(ItemStack stack) {
-		if (Options.REQUIRE_ENERGY && stack.getItem() instanceof ItemForgeEnergy) {
-			ItemForgeEnergy item = (ItemForgeEnergy) stack.getItem();
-			return new EnergyStorageSettable(stack, item.getCapacity(), item.getMaxReceive(), item.getMaxExtract());
-		}
-		return null;
-	}
+    @Override
+    public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
+        return new EnergyCapabilityProvider(stack, this);
+    }
 
-	public int getCapacity() {
-		return capacity;
-	}
+    public static class EnergyCapabilityProvider implements ICapabilityProvider {
+        private final ItemStack stack;
+        private final ItemForgeEnergy item;
+        private final LazyOptional<IEnergyStorage> holder;
 
-	public int getMaxReceive() {
-		return maxReceive;
-	}
+        public EnergyCapabilityProvider(ItemStack stack, ItemForgeEnergy item) {
+            this.stack = stack;
+            this.item = item;
+            this.holder = LazyOptional.of(() -> new IEnergyStorage() {
+                @Override
+                public int receiveEnergy(int maxReceive, boolean simulate) {
+                    return item.receiveEnergy(stack, maxReceive, simulate);
+                }
 
-	public int getMaxExtract() {
-		return maxExtract;
-	}
+                @Override
+                public int extractEnergy(int maxExtract, boolean simulate) {
+                    return item.extractEnergy(stack, maxExtract, simulate);
+                }
 
-	public void setEnergyStored(ItemStack stack, int amount) {
-		if (Options.REQUIRE_ENERGY) {
-			getForgeEnergyStorage(stack).setEnergyStored(amount);
-		}
-	}
+                @Override
+                public int getEnergyStored() {
+                    return item.getEnergyStored(stack);
+                }
 
-	public int getEnergyStored(ItemStack stack) {
-		if (!Options.REQUIRE_ENERGY) {
-			return 0;
-		}
-		return getForgeEnergyStorage(stack).getEnergyStored();
-	}
+                @Override
+                public int getMaxEnergyStored() {
+                    return item.getEnergyCapacity();
+                }
 
-	public int getMaxEnergyStored(ItemStack stack) {
-		if (!Options.REQUIRE_ENERGY) {
-			return 0;
-		}
-		return getForgeEnergyStorage(stack).getMaxEnergyStored();
-	}
+                @Override
+                public boolean canExtract() {
+                    return true;
+                }
 
-	public int extractEnergy(ItemStack stack, int amount, boolean simulate) {
-		if (!Options.REQUIRE_ENERGY) {
-			return 0;
-		}
-		return getForgeEnergyStorage(stack).extractEnergy(amount, simulate);
-	}
+                @Override
+                public boolean canReceive() {
+                    return true;
+                }
+            });
+        }
 
-	public int receiveEnergy(ItemStack stack, int amount, boolean simulate) {
-		if (!Options.REQUIRE_ENERGY) {
-			return 0;
-		}
-		return getForgeEnergyStorage(stack).receiveEnergy(amount, simulate);
-	}
-
-	public void setFullEnergy(ItemStack stack) {
-		if (Options.REQUIRE_ENERGY) {
-			setEnergyStored(stack, getMaxEnergyStored(stack));
-		}
-	}
-
-	public static class EnergyStorageSettable implements IEnergyStorage, ICapabilityProvider {
-
-		ItemStack stack = ItemStack.EMPTY;
-		protected int capacity;
-		protected int maxReceive;
-		protected int maxExtract;
-		private static final String TAG_ENERGY = "ForgeEnergy";
-
-		public EnergyStorageSettable(@Nonnull ItemStack stack, int capacity, int maxReceive, int maxExtract) {
-			this.stack = stack;
-			this.capacity = capacity;
-			this.maxReceive = maxReceive;
-			this.maxExtract = maxExtract;
-		}
-
-		public Item setEnergyStored(int amount) {
-			if (amount > capacity) {
-				amount = capacity;
-			}
-			else if (amount < 0) {
-				amount = 0;
-			}
-			if (!stack.hasTagCompound()) {
-				stack.setTagCompound(new NBTTagCompound());
-			}
-			stack.getTagCompound().setInteger(TAG_ENERGY, amount);
-			return stack.getItem();
-		}
-
-		@Override
-		public int getEnergyStored() {
-			if (!stack.hasTagCompound()) {
-				stack.setTagCompound(new NBTTagCompound());
-			}
-			if (!stack.getTagCompound().hasKey(TAG_ENERGY, Constants.NBT.TAG_INT)) {
-				stack.getTagCompound().setInteger(TAG_ENERGY, 0);
-			}
-			return stack.getTagCompound().getInteger(TAG_ENERGY);
-		}
-
-		@Override
-		public int receiveEnergy(int maxReceive, boolean simulate) {
-			if (!canReceive()) {
-				return 0;
-			}
-			int energyReceived = Math.min(capacity - getEnergyStored(), Math.min(this.maxReceive, maxReceive));
-			if (!simulate) {
-				setEnergyStored(getEnergyStored() + energyReceived);
-			}
-			return energyReceived;
-		}
-
-		@Override
-		public int extractEnergy(int maxExtract, boolean simulate) {
-			if (!canExtract()) {
-				return 0;
-			}
-			int energyExtracted = Math.min(getEnergyStored(), Math.min(this.maxExtract, maxExtract));
-			if (!simulate) {
-				setEnergyStored(getEnergyStored() - energyExtracted);
-			}
-			return energyExtracted;
-		}
-
-		@Override
-		public int getMaxEnergyStored() {
-			return capacity;
-		}
-
-		@Override
-		public boolean canExtract() {
-			return maxExtract > 0;
-		}
-
-		@Override
-		public boolean canReceive() {
-			return maxReceive > 0;
-		}
-
-		@Override
-		public boolean hasCapability(@Nonnull Capability<?> capability, @Nullable EnumFacing facing) {
-			return capability == CapabilityEnergy.ENERGY;
-		}
-
-		@Nullable
-		@Override
-		public <T> T getCapability(Capability<T> capability, EnumFacing facing) {
-			if (capability == CapabilityEnergy.ENERGY) {
-				if (stack.getItem() instanceof ItemForgeEnergy) {
-					EnergyStorageSettable storage = ((ItemForgeEnergy) stack.getItem()).getForgeEnergyStorage(stack);
-					return CapabilityEnergy.ENERGY.cast(storage);
-				}
-			}
-			return null;
-		}
-
-	}
-
+        @Nonnull
+        @Override
+        public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
+            if (cap == ForgeCapabilities.ENERGY) {
+                return holder.cast();
+            }
+            return LazyOptional.empty();
+        }
+    }
 }

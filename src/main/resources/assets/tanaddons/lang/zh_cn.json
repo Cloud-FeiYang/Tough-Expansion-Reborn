@@ -1,0 +1,24 @@
+{
+  "block.tanaddons.temp_regulator": "温度调节器",
+  "item.tanaddons.temp_regulator": "温度调节器",
+  "item.tanaddons.portable_temp_regulator": "便携式温度调节器",
+  "item.tanaddons.thirst_quencher": "止渴仪",
+
+  "itemGroup.tanaddons": "Tough Expansion",
+
+  "tooltip.tanaddons.thirstquencher.desc": "右击水源方块或装水的储罐以填充",
+  "tooltip.tanaddons.thirstquencher.desc2": "需要水和FE能量以维持运行。",
+  "tooltip.tanaddons.thirstquencher.desc3": "自动净水并持续补充口渴值与水分。",
+  "tooltip.tanaddons.ptempregulator.desc": "持续保持玩家体温处于舒适适宜区间。",
+  "tooltip.tanaddons.ptempregulator.desc2": "需要FE能量才能生效。",
+  "tooltip.tanaddons.baublesitem": "可用在 %s 饰品栏佩戴生效。",
+  "tooltip.tanaddons.redstone_rclick.desc": "空手右击以设置红石模式",
+  "tooltip.tanaddons.redstone_rclick.desc2": "(潜行+右击查看电量信息)",
+  "tooltip.tanaddons.redstone_mode": "红石模式",
+  "tooltip.tanaddons.energy": "能量",
+  "tooltip.tanaddons.energy2": "每名玩家调节体温消耗 FE/tick",
+
+  "message.tanaddons.redstonerequired": "红石模式：需要红石信号",
+  "message.tanaddons.noredstonerequired": "红石模式：需要无红石信号",
+  "message.tanaddons.redstoneignored": "红石模式：忽略红石信号（始终运行）"
+}

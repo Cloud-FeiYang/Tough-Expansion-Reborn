@@ -1,24 +1,15 @@
 package p455w0rd.tanaddons.init;
 
-import net.minecraftforge.fml.common.registry.GameRegistry;
+import net.minecraft.world.level.block.Block;
+import net.minecraftforge.registries.DeferredRegister;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.RegistryObject;
 import p455w0rd.tanaddons.blocks.BlockTempRegulator;
-import p455w0rd.tanaddons.tiles.TileTempRegulator;
 
-/**
- * @author p455w0rd
- *
- */
 public class ModBlocks {
 
-	public static BlockTempRegulator TEMP_REGULATOR;
+    public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, ModGlobals.MODID);
 
-	public static void init() {
-		TEMP_REGULATOR = new BlockTempRegulator();
-		GameRegistry.registerTileEntity(TileTempRegulator.class, ModGlobals.MODID + ":tempregulator");
-	}
-
-	public static void initModels() {
-		TEMP_REGULATOR.initModel();
-	}
+    public static final RegistryObject<BlockTempRegulator> TEMP_REGULATOR = BLOCKS.register("temp_regulator", BlockTempRegulator::new);
 
 }

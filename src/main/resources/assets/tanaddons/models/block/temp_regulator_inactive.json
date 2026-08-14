@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "tanaddons:block/furnace_top",
+    "bottom": "tanaddons:block/furnace_bottom",
+    "side": "tanaddons:block/temp_regulator_side_off"
+  }
+}

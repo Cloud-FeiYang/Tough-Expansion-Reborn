@@ -1,0 +1,32 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "BCB",
+    "LIL",
+    "ORO"
+  ],
+  "key": {
+    "B": {
+      "item": "minecraft:blue_ice"
+    },
+    "C": {
+      "item": "minecraft:comparator"
+    },
+    "L": {
+      "item": "minecraft:lava_bucket"
+    },
+    "I": {
+      "item": "minecraft:iron_block"
+    },
+    "O": {
+      "item": "minecraft:obsidian"
+    },
+    "R": {
+      "item": "minecraft:redstone_block"
+    }
+  },
+  "result": {
+    "item": "tanaddons:temp_regulator",
+    "count": 1
+  }
+}

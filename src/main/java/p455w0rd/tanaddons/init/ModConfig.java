@@ -1,62 +1,84 @@
 package p455w0rd.tanaddons.init;
 
-import java.io.File;
+import net.minecraftforge.common.ForgeConfigSpec;
+import org.apache.commons.lang3.tuple.Pair;
 
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.common.config.Configuration;
-import net.minecraftforge.fml.client.event.ConfigChangedEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-
-/**
- * @author p455w0rd
- *
- */
 public class ModConfig {
-	public static Configuration CONFIG;
 
-	private static final String DEF_CAT = "General";
+    public static class Common {
+        public final ForgeConfigSpec.BooleanValue requireEnergy;
+        public final ForgeConfigSpec.IntValue tempRegulatorRFCapacity;
+        public final ForgeConfigSpec.IntValue tempRegulatorRFPerTick;
+        public final ForgeConfigSpec.IntValue tempRegulatorRadius;
 
-	public static void init() {
-		if (CONFIG == null) {
-			CONFIG = new Configuration(new File(ModGlobals.CONFIG_FILE));
-			MinecraftForge.EVENT_BUS.register(new ModConfig());
-		}
-		Options.REQUIRE_ENERGY = CONFIG.getBoolean("RequireEnergy", DEF_CAT, true, "Set to false to disable energy (Forge Energy) requirement");
-		Options.TEMP_REGULATOR_RADIUS = CONFIG.getInt("TempRegulatorBlockRadius", DEF_CAT, 20, 1, 40, "Effective radius of Temperature Regulator Block");
-		Options.TEMP_REGULATOR_RF_CAPACITY = CONFIG.getInt("TempRegulatorBlockRFCap", DEF_CAT, 1600000, 1, 16000000, "RF Capacity of Temperator Regulator Block");
-		Options.THIRST_HEALTH_REGEN_FIX = CONFIG.getBoolean("ThirstHealthFix", DEF_CAT, true, "Makes health regen respect same logic as hunger. (If player has less than 10 thirst drops, health will not regen.)");
-		Options.THIRST_QUENCHER_RF_CAPACITY = CONFIG.getInt("ThirstQuencherRFCap", DEF_CAT, 400000, 1, 1600000, "RF Capacity for Thirst Quencher");
-		Options.PORTABLE_TEMP_REGULATOR_CAPACITY = CONFIG.getInt("PortableTempRegulatorCap", DEF_CAT, 400000, 1, 1600000, "RF Capacity for Portable Temperature Regular");
-		Options.PORTABLE_TEMP_REGULATOR_RF_PER_TICK = CONFIG.getInt("PortableTempRegulatorRFPerTick", DEF_CAT, 10, 1, 10000, "How much RF per tick is consumed while the portable temp regulator is actively regulating temperature");
-		Options.THIRST_QUNCHER_RF_PER_TICK = CONFIG.getInt("ThirstQuencherRFPerTick", DEF_CAT, 10, 1, 10000, "How much RF per tick is consumed while the Thirst Quencher is actively quenching thirst");
-		Options.TEMP_REGULATOR_RF_PER_TICK = CONFIG.getInt("TempRegulatorRFPerTick", DEF_CAT, 100, 1, 10000, "How much RF per tick is consumed while the Temp Regulator (block) is actively regulating temperature");
-		Options.THIRST_QUENCHER_WATER_CAPACITY = CONFIG.getInt("ThirstQuencherWaterCapacity", DEF_CAT, 16, 8, 64, "How much water (in buckets) the Thirst Quencher can hold");
+        public final ForgeConfigSpec.IntValue portableTempRegulatorRFCapacity;
+        public final ForgeConfigSpec.IntValue portableTempRegulatorRFPerTick;
 
-		if (CONFIG.hasChanged()) {
-			CONFIG.save();
-		}
-	}
+        public final ForgeConfigSpec.IntValue thirstQuencherRFCapacity;
+        public final ForgeConfigSpec.IntValue thirstQuencherRFPerTick;
+        public final ForgeConfigSpec.IntValue thirstQuencherWaterCapacity;
 
-	@SubscribeEvent
-	public void onConfigChange(ConfigChangedEvent.OnConfigChangedEvent e) {
-		if (e.getModID().equals(ModGlobals.MODID)) {
-			init();
-		}
-	}
+        public Common(ForgeConfigSpec.Builder builder) {
+            builder.push("general");
 
-	public static class Options {
+            requireEnergy = builder
+                    .comment("Whether temperature regulation and thirst quenching require Forge Energy")
+                    .define("requireEnergy", true);
 
-		public static boolean REQUIRE_ENERGY = true;
-		public static int TEMP_REGULATOR_RADIUS = 20;
-		public static int TEMP_REGULATOR_RF_CAPACITY = 1600000;
-		public static boolean THIRST_HEALTH_REGEN_FIX = true;
-		public static int THIRST_QUENCHER_RF_CAPACITY = 400000;
-		public static int PORTABLE_TEMP_REGULATOR_CAPACITY = 1600000;
-		public static int PORTABLE_TEMP_REGULATOR_RF_PER_TICK = 10;
-		public static int THIRST_QUNCHER_RF_PER_TICK = 10;
-		public static int TEMP_REGULATOR_RF_PER_TICK = 100;
-		public static int THIRST_QUENCHER_WATER_CAPACITY = 16;
+            builder.pop();
 
-	}
+            builder.push("temp_regulator_block");
 
+            tempRegulatorRFCapacity = builder
+                    .comment("FE storage capacity of the Temperature Regulator block")
+                    .defineInRange("rfCapacity", 1000000, 1000, 100000000);
+
+            tempRegulatorRFPerTick = builder
+                    .comment("FE consumed per tick per player being regulated by the block")
+                    .defineInRange("rfPerTick", 40, 0, 100000);
+
+            tempRegulatorRadius = builder
+                    .comment("Block radius within which players are regulated")
+                    .defineInRange("radius", 7, 1, 64);
+
+            builder.pop();
+
+            builder.push("portable_temp_regulator");
+
+            portableTempRegulatorRFCapacity = builder
+                    .comment("FE storage capacity of the Portable Temperature Regulator")
+                    .defineInRange("rfCapacity", 400000, 1000, 100000000);
+
+            portableTempRegulatorRFPerTick = builder
+                    .comment("FE consumed per tick while regulating player temperature")
+                    .defineInRange("rfPerTick", 20, 0, 100000);
+
+            builder.pop();
+
+            builder.push("thirst_quencher");
+
+            thirstQuencherRFCapacity = builder
+                    .comment("FE storage capacity of the Thirst Quencher")
+                    .defineInRange("rfCapacity", 400000, 1000, 100000000);
+
+            thirstQuencherRFPerTick = builder
+                    .comment("FE consumed per tick while quenching player thirst")
+                    .defineInRange("rfPerTick", 20, 0, 100000);
+
+            thirstQuencherWaterCapacity = builder
+                    .comment("Internal water storage capacity in mB (default 8000 = 8 buckets)")
+                    .defineInRange("waterCapacity", 8000, 1000, 64000);
+
+            builder.pop();
+        }
+    }
+
+    public static final ForgeConfigSpec COMMON_SPEC;
+    public static final Common COMMON;
+
+    static {
+        final Pair<Common, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Common::new);
+        COMMON_SPEC = specPair.getRight();
+        COMMON = specPair.getLeft();
+    }
 }

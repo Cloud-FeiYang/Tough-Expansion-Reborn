@@ -1,73 +1,119 @@
 buildscript {
     repositories {
-        jcenter()
-		mavenLocal()
+        maven { url = 'https://maven.neoforged.net/releases/' }
+        maven { url = 'https://maven.minecraftforge.net' }
         mavenCentral()
-        maven {
-            name = "forge"
-            url = "http://files.minecraftforge.net/maven"
-        }
     }
-	dependencies {
-        classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+    dependencies {
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '[6.0,6.2)', changing: true
     }
 }
 
-apply plugin: 'net.minecraftforge.gradle.forge'
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'eclipse'
+apply plugin: 'idea'
 
-group = "p455w0rd.tanaddons"
-version = "1.12-" + getVersion("VERSION")
-archivesBaseName = "ToughExpansion"
+group = 'p455w0rd.tanaddons'
+version = '1.20.1-1.0.0'
+
+base {
+    archivesName = 'ToughExpansion'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+    withSourcesJar()
+}
 
 minecraft {
-    version = "1.12.2-14.23.3.2673"
-	mappings = "snapshot_20171003"
-	runDir = "run"
-	useDepAts = true
+    mappings channel: 'official', version: '1.20.1'
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                'tanaddons' {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {
+            property 'forge.enabledGameTestNamespaces', 'tanaddons'
+        }
+
+        server {
+            property 'forge.enabledGameTestNamespaces', 'tanaddons'
+            args '--nogui'
+        }
+
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', 'tanaddons', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
 }
 
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
 repositories {
-	mavenCentral()
-	maven {
-		name = "progwml6"
-		url = "http://dvs1.progwml6.com/files/maven"
-	}
+    mavenCentral()
+    maven {
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases/'
+    }
+    maven {
+        name = 'MinecraftForge'
+        url = 'https://maven.minecraftforge.net/'
+    }
 }
 
 dependencies {
-	deobfCompile "mezz.jei:jei_1.12.2:+"
+    minecraft 'net.neoforged:forge:1.20.1-47.1.105'
 }
 
-processResources {
-	inputs.property "version", project.version
-	inputs.property "mcversion", project.minecraft.version
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+        minecraft_version      : '1.20.1',
+        minecraft_version_range: '[1.20.1,1.21)',
+        neoforge_version       : '47.1.105',
+        neoforge_version_range : '[47.1.105,)',
+        loader_version_range   : '[47,)',
+        mod_id                 : 'tanaddons',
+        mod_name               : 'Tough Expansion',
+        mod_license            : 'MIT',
+        mod_version            : project.version,
+        mod_authors            : 'p455w0rd, Ported to 1.20.1',
+        mod_description        : 'Expands temperature regulation and thirst quenching in modern Minecraft.'
+    ]
+    inputs.properties replaceProperties
 
-	from (sourceSets.main.resources.srcDirs) {
-		include "mcmod.info"
-		expand "version": project.version, "mcversion": project.minecraft.version
-	}
-		
-	from (sourceSets.main.resources.srcDirs) {
-		exclude "mcmod.info"
-	}
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
 }
 
-String getVersion(String type) {
-	String major = "0";
-	String revision = "0";
-	String patch = "0";
-	String prefix = "public static final String $type = \"";
-	File file = file("src/main/java/p455w0rd/tanaddons/init/ModGlobals.java")
-	file.eachLine { String s ->
-		s = s.trim();
-		if (s.startsWith(prefix)) {
-			s = s.substring(prefix.length(), s.length() - 2);
-			String[] pts = s.split("\\.");
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+            'Specification-Title'     : 'tanaddons',
+            'Specification-Vendor'    : 'p455w0rd',
+            'Specification-Version'   : '1',
+            'Implementation-Title'    : project.name,
+            'Implementation-Version'  : project.jar.archiveVersion,
+            'Implementation-Vendor'   : 'p455w0rd',
+            'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
 
-			major = pts[0];
-			revision = pts[1];
-			patch = pts[2];
-		}
-	}
-	return "$major.$revision.$patch";
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(17)
 }

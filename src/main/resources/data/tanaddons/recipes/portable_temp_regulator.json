@@ -1,0 +1,32 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "BGL",
+    "CTC",
+    "GQG"
+  ],
+  "key": {
+    "B": {
+      "item": "minecraft:blue_ice"
+    },
+    "G": {
+      "item": "minecraft:gold_ingot"
+    },
+    "L": {
+      "item": "minecraft:lava_bucket"
+    },
+    "C": {
+      "item": "minecraft:comparator"
+    },
+    "T": {
+      "item": "tanaddons:temp_regulator"
+    },
+    "Q": {
+      "item": "minecraft:quartz"
+    }
+  },
+  "result": {
+    "item": "tanaddons:portable_temp_regulator",
+    "count": 1
+  }
+}

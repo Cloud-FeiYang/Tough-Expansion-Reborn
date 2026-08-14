@@ -1,41 +1,34 @@
 package p455w0rd.tanaddons;
 
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.SidedProxy;
-import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
-import p455w0rd.tanaddons.init.ModGlobals;
-import p455w0rd.tanaddons.proxy.CommonProxy;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import p455w0rd.tanaddons.init.*;
 
-@Mod(modid = ModGlobals.MODID, name = ModGlobals.NAME, version = ModGlobals.VERSION, dependencies = ModGlobals.DEPENDANCIES, acceptedMinecraftVersions = "1.12")
+@Mod(ModGlobals.MODID)
 public class TANAddons {
 
-	@SidedProxy(clientSide = ModGlobals.CLIENT_PROXY, serverSide = ModGlobals.SERVER_PROXY)
-	public static CommonProxy PROXY;
+    public static final Logger LOGGER = LogManager.getLogger(ModGlobals.NAME);
 
-	@Mod.Instance(ModGlobals.MODID)
-	public static TANAddons INSTANCE;
+    public TANAddons() {
+        IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-	@Mod.EventHandler
-	public void preInit(FMLPreInitializationEvent e) {
-		INSTANCE = this;
-		PROXY.preInit(e);
-	}
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, p455w0rd.tanaddons.init.ModConfig.COMMON_SPEC);
 
-	@Mod.EventHandler
-	public void init(FMLInitializationEvent e) {
-		PROXY.init(e);
-	}
+        ModBlocks.BLOCKS.register(modBus);
+        ModItems.ITEMS.register(modBus);
+        ModBlockEntities.BLOCK_ENTITIES.register(modBus);
+        ModCreativeTabs.CREATIVE_MODE_TABS.register(modBus);
 
-	@Mod.EventHandler
-	public void postInit(FMLPostInitializationEvent e) {
-		PROXY.postInit(e);
-	}
+        modBus.addListener(this::commonSetup);
+    }
 
-	@Mod.EventHandler
-	public void serverStarting(FMLServerStartingEvent e) {
-		PROXY.serverStarting(e);
-	}
+    private void commonSetup(final FMLCommonSetupEvent event) {
+        event.enqueueWork(ModNetworking::register);
+    }
 }

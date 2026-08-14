@@ -1,0 +1,29 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GWG",
+    "CIC",
+    "GRG"
+  ],
+  "key": {
+    "G": {
+      "item": "minecraft:glass"
+    },
+    "W": {
+      "item": "minecraft:water_bucket"
+    },
+    "C": {
+      "item": "minecraft:comparator"
+    },
+    "I": {
+      "item": "minecraft:iron_block"
+    },
+    "R": {
+      "item": "minecraft:redstone_block"
+    }
+  },
+  "result": {
+    "item": "tanaddons:thirst_quencher",
+    "count": 1
+  }
+}

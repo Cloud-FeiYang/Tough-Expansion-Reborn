@@ -1,310 +1,220 @@
 package p455w0rd.tanaddons.tiles;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.energy.IEnergyStorage;
+import org.jetbrains.annotations.Nullable;
+import p455w0rd.tanaddons.blocks.BlockTempRegulator;
+import p455w0rd.tanaddons.compat.CompatManager;
+import p455w0rd.tanaddons.init.ModBlockEntities;
+import p455w0rd.tanaddons.init.ModConfig;
+
+import javax.annotation.Nonnull;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import javax.annotation.Nullable;
+public class TileTempRegulator extends BlockEntity {
 
-import com.google.common.collect.Maps;
+    public static final String TAG_ENERGY = "Energy";
+    public static final String TAG_MODE = "RSMode";
 
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.play.server.SPacketUpdateTileEntity;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.ITickable;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.energy.CapabilityEnergy;
-import net.minecraftforge.energy.IEnergyStorage;
-import p455w0rd.tanaddons.init.ModConfig.Options;
-import toughasnails.api.TANPotions;
-import toughasnails.api.stat.capability.ITemperature;
-import toughasnails.api.temperature.Temperature;
-import toughasnails.api.temperature.TemperatureHelper;
-import toughasnails.temperature.TemperatureHandler;
+    private int energy = 0;
+    private int mode = 0; // 0 = requires signal, 1 = requires lack of signal, 2 = ignored
 
-/**
- * @author p455w0rd
- *
- */
-public class TileTempRegulator extends TileEntity implements ITickable {
+    private final Map<UUID, Integer> playerTimers = new HashMap<>();
+    private final LazyOptional<IEnergyStorage> energyHolder = LazyOptional.of(this::createEnergyStorage);
 
-	private int INPUT = 10000;
-	private final int ENERGY_USE;
-	private int ENERGY = 0;
-	public static final String TAG_ENERGY = "Energy";
-	private int REDSTONE_MODE = 0; //0 = requires redstone, 1 = requires lack of signal, 2 = redstone ignored
-	public static final String TAG_MODE = "RSMode";
-	private final String TAG_TIMERLIST = "TimerList";
-	private final String TAG_TIMERLISTENTRY_PLAYERID = "PlayerID";
-	private final String TAG_TIMERLISTENTRY_TIME = "Time";
-	private Map<EntityPlayer, Integer> PLAYER_TIMERS = Maps.newHashMap();
+    public TileTempRegulator(BlockPos pos, BlockState state) {
+        super(ModBlockEntities.TEMP_REGULATOR.get(), pos, state);
+    }
 
-	public TileTempRegulator() {
-		ENERGY_USE = Options.TEMP_REGULATOR_RF_PER_TICK;
-	}
+    private IEnergyStorage createEnergyStorage() {
+        return new IEnergyStorage() {
+            @Override
+            public int receiveEnergy(int maxReceive, boolean simulate) {
+                int capacity = getMaxEnergyStored();
+                int energyReceived = Math.min(capacity - energy, Math.min(10000, maxReceive));
+                if (!simulate && energyReceived > 0) {
+                    energy += energyReceived;
+                    setChanged();
+                }
+                return energyReceived;
+            }
 
-	@Override
-	public boolean hasCapability(Capability<?> capability, @Nullable EnumFacing facing) {
-		return Options.REQUIRE_ENERGY && capability == CapabilityEnergy.ENERGY;
-	}
+            @Override
+            public int extractEnergy(int maxExtract, boolean simulate) {
+                return 0;
+            }
 
-	@Override
-	@Nullable
-	public <T> T getCapability(Capability<T> capability, @Nullable EnumFacing facing) {
-		return hasCapability(capability, facing) ? CapabilityEnergy.ENERGY.cast(new IEnergyStorage() {
+            @Override
+            public int getEnergyStored() {
+                return energy;
+            }
 
-			@Override
-			public int receiveEnergy(int input, boolean simulate) {
-				int energyReceived = Math.min(Options.TEMP_REGULATOR_RF_CAPACITY - ENERGY, Math.min(INPUT, input));
-				if (!simulate) {
-					ENERGY += energyReceived;
-				}
-				return energyReceived;
-			}
+            @Override
+            public int getMaxEnergyStored() {
+                return ModConfig.COMMON.tempRegulatorRFCapacity.get();
+            }
 
-			@Override
-			public int extractEnergy(int paramInt, boolean simulate) {
-				return 0;
-			}
+            @Override
+            public boolean canExtract() {
+                return false;
+            }
 
-			@Override
-			public int getEnergyStored() {
-				return ENERGY;
-			}
+            @Override
+            public boolean canReceive() {
+                return true;
+            }
+        };
+    }
 
-			@Override
-			public int getMaxEnergyStored() {
-				return Options.TEMP_REGULATOR_RF_CAPACITY;
-			}
+    public int getMode() {
+        return mode;
+    }
 
-			@Override
-			public boolean canExtract() {
-				return false;
-			}
+    public void nextMode() {
+        mode = (mode + 1) % 3;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
 
-			@Override
-			public boolean canReceive() {
-				return true;
-			}
+    public int getEnergyStored() {
+        return energy;
+    }
 
-		}) : null;
+    public int getMaxEnergyStored() {
+        return ModConfig.COMMON.tempRegulatorRFCapacity.get();
+    }
 
-	}
+    public int getEnergyUse() {
+        return ModConfig.COMMON.tempRegulatorRFPerTick.get();
+    }
 
-	@Override
-	public void markDirty() {
-		super.markDirty();
-		if (getWorld() != null) {
-			IBlockState state = getWorld().getBlockState(pos);
-			if (state != null) {
-				getWorld().notifyBlockUpdate(pos, state, state, 3);
-			}
-		}
-	}
+    public boolean isRunning() {
+        if (level == null) {
+            return false;
+        }
+        boolean hasSignal = level.hasNeighborSignal(worldPosition);
+        boolean redstoneSatisfied = switch (mode) {
+            case 0 -> hasSignal;
+            case 1 -> !hasSignal;
+            default -> true;
+        };
+        boolean hasEnergy = !ModConfig.COMMON.requireEnergy.get() || energy >= getEnergyUse();
+        return redstoneSatisfied && hasEnergy;
+    }
 
-	public int getMode() {
-		return REDSTONE_MODE;
-	}
+    public static void tick(Level level, BlockPos pos, BlockState state, TileTempRegulator tile) {
+        if (level.isClientSide) {
+            return;
+        }
 
-	private IEnergyStorage getEnergyCap() {
-		return Options.REQUIRE_ENERGY ? getCapability(CapabilityEnergy.ENERGY, null) : null;
-	}
+        boolean running = tile.isRunning();
+        if (state.getValue(BlockTempRegulator.ACTIVE) != running) {
+            level.setBlock(pos, state.setValue(BlockTempRegulator.ACTIVE, running), 3);
+        }
 
-	public int getEnergyStored() {
-		if (!Options.REQUIRE_ENERGY) {
-			return 0;
-		}
-		return getEnergyCap().getEnergyStored();
-	}
+        if (!running) {
+            return;
+        }
 
-	public int getEnergyUse() {
-		if (!Options.REQUIRE_ENERGY) {
-			return 0;
-		}
-		return ENERGY_USE;
-	}
+        int radius = ModConfig.COMMON.tempRegulatorRadius.get();
+        AABB box = new AABB(pos).inflate(radius);
+        List<Player> players = level.getEntitiesOfClass(Player.class, box);
 
-	private void setEnergyStored(int amount) {
-		if (!Options.REQUIRE_ENERGY) {
-			return;
-		}
-		if (amount > Options.TEMP_REGULATOR_RF_CAPACITY) {
-			ENERGY = Options.TEMP_REGULATOR_RF_CAPACITY;
-			return;
-		}
-		if (amount < 0) {
-			ENERGY = 0;
-			return;
-		}
-		ENERGY = amount;
-	}
+        for (Player player : players) {
+            if (CompatManager.isPlayerTemperatureAbnormal(player)) {
+                int timer = tile.getPlayerTimer(player);
+                if (timer <= 0) {
+                    CompatManager.regulateTemperature(player);
+                    tile.setPlayerTimer(player, 20);
+                }
+                else {
+                    tile.setPlayerTimer(player, timer - 1);
+                }
 
-	public boolean isRunning() {
-		switch (REDSTONE_MODE) {
-		case 0:
-		default:
-			return (world.isBlockIndirectlyGettingPowered(pos) > 0 || world.isBlockPowered(pos)) && (!Options.REQUIRE_ENERGY || getEnergyStored() > ENERGY_USE);
-		case 1:
-			return (world.isBlockIndirectlyGettingPowered(pos) == 0 && !world.isBlockPowered(pos)) && (!Options.REQUIRE_ENERGY || getEnergyStored() > ENERGY_USE);
-		case 2:
-			return !Options.REQUIRE_ENERGY || getEnergyStored() > ENERGY_USE;
-		}
-	}
+                if (ModConfig.COMMON.requireEnergy.get()) {
+                    tile.energy = Math.max(0, tile.energy - tile.getEnergyUse());
+                    tile.setChanged();
+                }
+            }
+            else {
+                tile.removePlayerTimer(player);
+            }
+        }
+    }
 
-	public void nextMode() {
-		int newMode = REDSTONE_MODE + 1;
-		if (newMode > 2) {
-			newMode = 0;
-		}
-		REDSTONE_MODE = newMode;
-		markDirty();
-	}
+    public int getPlayerTimer(Player player) {
+        return playerTimers.getOrDefault(player.getUUID(), 0);
+    }
 
-	@Override
-	public void readFromNBT(NBTTagCompound compound) {
-		super.readFromNBT(compound);
-		if (Options.REQUIRE_ENERGY && compound.hasKey(TAG_ENERGY)) {
-			ENERGY = compound.getInteger(TAG_ENERGY);
-		}
-		if (compound.hasKey(TAG_MODE)) {
-			REDSTONE_MODE = compound.getInteger(TAG_MODE);
-		}
-		if (compound.hasKey(TAG_TIMERLIST) && compound.getTagList(TAG_TIMERLIST, 10).tagCount() > 0) {
-			NBTTagList tagList = compound.getTagList(TAG_TIMERLIST, 10);
-			Map<EntityPlayer, Integer> newList = Maps.newHashMap();
-			for (int i = 0; i < tagList.tagCount(); i++) {
-				NBTTagCompound entry = tagList.getCompoundTagAt(i);
-				if (entry == null || getWorld() == null || entry.getString(TAG_TIMERLISTENTRY_PLAYERID) == null) {
-					continue;
-				}
-				EntityPlayer player = getWorld().getPlayerEntityByUUID(UUID.fromString(entry.getString(TAG_TIMERLISTENTRY_PLAYERID)));
-				newList.put(player, entry.getInteger(TAG_TIMERLISTENTRY_TIME));
-			}
-			PLAYER_TIMERS = newList;
-		}
-	}
+    public void setPlayerTimer(Player player, int time) {
+        playerTimers.put(player.getUUID(), time);
+    }
 
-	@Override
-	public NBTTagCompound writeToNBT(NBTTagCompound compound) {
-		super.writeToNBT(compound);
-		if (Options.REQUIRE_ENERGY) {
-			compound.setInteger(TAG_ENERGY, ENERGY);
-		}
-		compound.setInteger(TAG_MODE, REDSTONE_MODE);
-		if (PLAYER_TIMERS.keySet().size() > 0) {
-			NBTTagList tagList = new NBTTagList();
-			for (EntityPlayer player : PLAYER_TIMERS.keySet()) {
-				NBTTagCompound timerListNBTEntry = new NBTTagCompound();
-				timerListNBTEntry.setString(TAG_TIMERLISTENTRY_PLAYERID, player.getUniqueID().toString());
-				timerListNBTEntry.setInteger(TAG_TIMERLISTENTRY_TIME, PLAYER_TIMERS.get(player));
-				tagList.appendTag(timerListNBTEntry);
-			}
-			compound.setTag(TAG_TIMERLIST, tagList);
-		}
-		return compound;
-	}
+    public void removePlayerTimer(Player player) {
+        playerTimers.remove(player.getUUID());
+    }
 
-	@Override
-	public void update() {
-		if (getWorld() != null) {
-			IBlockState state = getWorld().getBlockState(pos);
-			state.getBlock().updateTick(getWorld(), getPos(), state, getWorld().rand);
-		}
-		if (!isRunning() || getWorld() == null || (Options.REQUIRE_ENERGY && getEnergyStored() < ENERGY_USE)) {
-			return;
-		}
+    @Override
+    public void load(CompoundTag tag) {
+        super.load(tag);
+        if (tag.contains(TAG_ENERGY)) {
+            energy = tag.getInt(TAG_ENERGY);
+        }
+        if (tag.contains(TAG_MODE)) {
+            mode = tag.getInt(TAG_MODE);
+        }
+    }
 
-		BlockPos negPos = new BlockPos(getPos().getX() - Options.TEMP_REGULATOR_RADIUS, 0, getPos().getZ() - Options.TEMP_REGULATOR_RADIUS);
-		BlockPos posPos = new BlockPos(getPos().getX() + Options.TEMP_REGULATOR_RADIUS, 255, getPos().getZ() + Options.TEMP_REGULATOR_RADIUS);
-		List<EntityPlayer> playerList = getWorld().getEntitiesWithinAABB(EntityPlayer.class, new AxisAlignedBB(negPos, posPos));
-		if (playerList.size() > 0) {
-			for (EntityPlayer player : playerList) {
-				TemperatureHandler tempHandler = (TemperatureHandler) TemperatureHelper.getTemperatureData(player);
-				ITemperature data = TemperatureHelper.getTemperatureData(player);
-				Temperature playerTemp = data.getTemperature();
-				int currentTemp = playerTemp.getRawValue();
-				int currentTime = getTime(player);
-				if (currentTemp != 14) {
-					if (getTime(player) <= 0) {
-						player.removePotionEffect(TANPotions.hypothermia);
-						player.removePotionEffect(TANPotions.hyperthermia);
-						if (currentTemp < 14) {
-							tempHandler.setTemperature(new Temperature(currentTemp + 1));
-						}
-						else if (currentTemp > 14) {
-							tempHandler.setTemperature(new Temperature(currentTemp - 1));
-						}
-						setTime(player, 100);
-						if (Options.REQUIRE_ENERGY) {
-							setEnergyStored(getEnergyStored() - ENERGY_USE);
-						}
-					}
-					else {
-						setTime(player, currentTime - 1);
-						if (Options.REQUIRE_ENERGY) {
-							setEnergyStored(getEnergyStored() - ENERGY_USE);
-						}
-					}
-				}
-				else {
-					removePlayerTimer(player);
-				}
-			}
-		}
+    @Override
+    protected void saveAdditional(CompoundTag tag) {
+        super.saveAdditional(tag);
+        tag.putInt(TAG_ENERGY, energy);
+        tag.putInt(TAG_MODE, mode);
+    }
 
-	}
+    @Override
+    public CompoundTag getUpdateTag() {
+        CompoundTag tag = super.getUpdateTag();
+        saveAdditional(tag);
+        return tag;
+    }
 
-	private int getTime(EntityPlayer player) {
-		if (PLAYER_TIMERS.containsKey(player)) {
-			return PLAYER_TIMERS.get(player);
-		}
-		return -1;
-	}
+    @Nullable
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
 
-	private void removePlayerTimer(EntityPlayer player) {
-		if (PLAYER_TIMERS.containsKey(player)) {
-			PLAYER_TIMERS.remove(player);
-		}
-	}
+    @Nonnull
+    @Override
+    public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
+        if (cap == ForgeCapabilities.ENERGY && ModConfig.COMMON.requireEnergy.get()) {
+            return energyHolder.cast();
+        }
+        return super.getCapability(cap, side);
+    }
 
-	private void setTime(EntityPlayer player, int time) {
-		if (!PLAYER_TIMERS.containsKey(player)) {
-			PLAYER_TIMERS.put(player, time);
-		}
-		else {
-			int currentTimeCached = PLAYER_TIMERS.get(player);
-			PLAYER_TIMERS.replace(player, currentTimeCached, time);
-		}
-	}
-
-	@Override
-	public boolean shouldRefresh(World world, BlockPos pos, IBlockState oldState, IBlockState newSate) {
-		return oldState.getBlock() != newSate.getBlock();
-	}
-
-	@Override
-	public void onDataPacket(NetworkManager net, SPacketUpdateTileEntity pkt) {
-		readFromNBT(pkt.getNbtCompound());
-	}
-
-	@Override
-	public NBTTagCompound getUpdateTag() {
-		NBTTagCompound nbt = super.getUpdateTag();
-		return writeToNBT(nbt);
-	}
-
-	@Override
-	@Nullable
-	public SPacketUpdateTileEntity getUpdatePacket() {
-		return new SPacketUpdateTileEntity(getPos(), 0, getUpdateTag());
-	}
-
+    @Override
+    public void invalidateCaps() {
+        super.invalidateCaps();
+        energyHolder.invalidate();
+    }
 }

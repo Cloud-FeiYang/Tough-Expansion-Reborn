@@ -1,394 +1,294 @@
 package p455w0rd.tanaddons.items;
 
-import static p455w0rd.tanaddons.init.ModGlobals.MODID_BAUBLES;
-
-import java.util.List;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.minecraftforge.fluids.capability.IFluidHandlerItem;
+import p455w0rd.tanaddons.compat.CompatManager;
+import p455w0rd.tanaddons.compat.curios.CuriosCompat;
+import p455w0rd.tanaddons.init.ModConfig;
+import p455w0rd.tanaddons.util.ReadableNumberConverter;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 
-import com.mojang.realmsclient.gui.ChatFormatting;
+public class ItemThirstQuencher extends ItemForgeEnergy {
 
-import baubles.api.BaubleType;
-import baubles.api.IBauble;
-import net.minecraft.block.BlockLiquid;
-import net.minecraft.block.material.Material;
-import net.minecraft.block.state.IBlockState;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.client.util.ITooltipFlag;
-import net.minecraft.creativetab.CreativeTabs;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.Blocks;
-import net.minecraft.init.SoundEvents;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.stats.StatList;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.EnumActionResult;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.NonNullList;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.RayTraceResult;
-import net.minecraft.world.World;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.minecraftforge.energy.CapabilityEnergy;
-import net.minecraftforge.fluids.Fluid;
-import net.minecraftforge.fluids.FluidRegistry;
-import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidHandler;
-import net.minecraftforge.fluids.capability.IFluidTankProperties;
-import net.minecraftforge.fluids.capability.templates.FluidHandlerItemStack;
-import net.minecraftforge.fml.common.Loader;
-import net.minecraftforge.fml.common.Optional.Interface;
-import net.minecraftforge.fml.common.Optional.Method;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
-import p455w0rd.tanaddons.init.ModConfig.Options;
-import p455w0rd.tanaddons.init.ModCreativeTab;
-import p455w0rd.tanaddons.init.ModGlobals;
-import p455w0rdslib.util.ReadableNumberConverter;
-import toughasnails.api.TANPotions;
-import toughasnails.api.config.GameplayOption;
-import toughasnails.api.config.SyncedConfig;
-import toughasnails.api.thirst.ThirstHelper;
-import toughasnails.fluids.PurifiedWaterFluid;
-import toughasnails.thirst.ThirstHandler;
+    public static final String TAG_FLUID_STORED = "FluidStored";
+    public static final String TAG_TIME = "TimeStart";
+    public static final String TAG_ACTIVE = "Active";
 
-/**
- * @author p455w0rd
- *
- */
-@Interface(iface = "baubles.api.IBauble", modid = MODID_BAUBLES, striprefs = true)
-public class ItemThirstQuencher extends ItemForgeEnergy implements IBauble {
+    public ItemThirstQuencher() {
+        super(ModConfig.COMMON.thirstQuencherRFCapacity.get(),
+              ModConfig.COMMON.thirstQuencherRFCapacity.get(),
+              ModConfig.COMMON.thirstQuencherRFPerTick.get() * 2);
+    }
 
-	private static final String NAME = "thirst_quencher";
-	private final int FLUID_CAPACITY;
-	protected int FLUID_STORED = 0;
-	public static final String TAG_FLUID_STORED = "FluidStored";
-	public static final String TAG_TIME = "TimeStart";
+    public int getFluidCapacity() {
+        return ModConfig.COMMON.thirstQuencherWaterCapacity.get();
+    }
 
-	public ItemThirstQuencher() {
-		super(Options.THIRST_QUENCHER_RF_CAPACITY, Options.THIRST_QUENCHER_RF_CAPACITY, 40, NAME);
-		setCreativeTab(ModCreativeTab.TAB);
-		FLUID_CAPACITY = (Options.THIRST_QUENCHER_WATER_CAPACITY < 8 ? 8 : Options.THIRST_QUENCHER_WATER_CAPACITY) * 1000;
-		addPropertyOverride(new ResourceLocation("filllevel"), (stack, world, entity) -> (getFluidStored(stack) / 1000) / 2);
-	}
+    public int getFluidStored(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null ? tag.getInt(TAG_FLUID_STORED) : 0;
+    }
 
-	@Override
-	public ICapabilityProvider initCapabilities(@Nonnull final ItemStack stack, @Nullable NBTTagCompound nbt) {
-		return new ICapabilityProvider() {
+    public void setFluidStored(ItemStack stack, int amount) {
+        int clamped = Math.max(0, Math.min(getFluidCapacity(), amount));
+        stack.getOrCreateTag().putInt(TAG_FLUID_STORED, clamped);
+    }
 
-			@Override
-			public boolean hasCapability(Capability<?> capability, EnumFacing facing) {
-				return capability == CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY || (Options.REQUIRE_ENERGY && capability == CapabilityEnergy.ENERGY);
-			}
+    public void drainFluid(ItemStack stack, int amount) {
+        setFluidStored(stack, getFluidStored(stack) - amount);
+    }
 
-			@Override
-			public <T> T getCapability(Capability<T> capability, EnumFacing facing) {
-				return capability == CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY ? CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY.cast((FluidHandlerItemStackSettable) getFluidProvider(stack)) : (Options.REQUIRE_ENERGY && capability == CapabilityEnergy.ENERGY) ? CapabilityEnergy.ENERGY.cast(getForgeEnergyStorage(stack)) : null;
-			}
+    public void doTick(Player player, ItemStack stack) {
+        if (player.level().isClientSide) {
+            return;
+        }
 
-		};
-	}
+        boolean requireEnergy = ModConfig.COMMON.requireEnergy.get();
+        int energyPerTick = ModConfig.COMMON.thirstQuencherRFPerTick.get();
 
-	public FluidHandlerItemStackSettable getFluidStorage(ItemStack stack) {
-		if (stack.getItem() instanceof ItemThirstQuencher) {
-			return new FluidHandlerItemStackSettable(stack, FLUID_CAPACITY);
-		}
-		return null;
-	}
+        if ((requireEnergy && getEnergyStored(stack) < energyPerTick) || getFluidStored(stack) < 100) {
+            setActive(stack, false);
+            return;
+        }
 
-	protected ICapabilityProvider getFluidProvider(ItemStack stack) {
-		return stack.getItem() instanceof ItemThirstQuencher ? ((ItemThirstQuencher) stack.getItem()).getFluidStorage(stack) : null;
-	}
+        if (CompatManager.isPlayerThirsty(player)) {
+            setActive(stack, true);
+            int currentTime = getTime(stack);
+            if (currentTime <= 0) {
+                CompatManager.quenchThirst(player);
+                drainFluid(stack, 100);
+                setTime(stack, 20);
+            }
+            else {
+                setTime(stack, currentTime - 1);
+            }
 
-	@Override
-	public void getSubItems(CreativeTabs tab, NonNullList<ItemStack> subItems) {
-		if (isInCreativeTab(tab)) {
-			ItemStack item = new ItemStack(this);
-			ItemStack item2 = new ItemStack(this);
-			ItemStack item3 = new ItemStack(this);
-			setFluidStored(item2, FLUID_CAPACITY);
-			subItems.add(new ItemStack(this)); // 0 RF - 0 Fluid
-			if (Options.REQUIRE_ENERGY) {
-				setFullEnergy(item);
-				subItems.add(item); // full RF - 0 fluid
-			}
-			subItems.add(item2); // 0 RF - full fluid
-			if (Options.REQUIRE_ENERGY) {
-				setFluidStored(item3, FLUID_CAPACITY);
-				setFullEnergy(item3);
-				subItems.add(item3); // full RF - full fluid
-			}
-		}
-	}
+            if (requireEnergy) {
+                setEnergyStored(stack, getEnergyStored(stack) - energyPerTick);
+            }
+        }
+        else {
+            setActive(stack, false);
+            if (getTime(stack) != 20) {
+                setTime(stack, 20);
+            }
+        }
+    }
 
-	public int getFluidStored(ItemStack stack) {
-		return getFluidStorage(stack).getFluidStored();
-	}
+    @Override
+    public void inventoryTick(ItemStack stack, Level level, Entity entity, int slot, boolean isSelected) {
+        if (!level.isClientSide && entity instanceof Player player) {
+            doTick(player, stack);
+        }
+    }
 
-	private void setFluidStored(ItemStack stack, int amount) {
-		getFluidStorage(stack).setFluidStored(amount);
-	}
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        int currentFluid = getFluidStored(stack);
+        int maxFluid = getFluidCapacity();
 
-	private int getTime(ItemStack stack) {
-		init(stack);
-		return stack.getTagCompound().getInteger(TAG_TIME);
-	}
+        if (currentFluid >= maxFluid) {
+            return InteractionResultHolder.pass(stack);
+        }
 
-	private void setTime(ItemStack stack, int amount) {
-		init(stack);
-		stack.getTagCompound().setLong(TAG_TIME, amount);
-	}
+        BlockHitResult hit = getPlayerPOVHitResult(level, player, ClipContext.Fluid.SOURCE_ONLY);
+        if (hit.getType() == HitResult.Type.BLOCK) {
+            BlockPos pos = hit.getBlockPos();
+            BlockState state = level.getBlockState(pos);
 
-	private void drainFluid(ItemStack stack, int amount) {
-		int amountStored = getFluidStored(stack) - amount;
-		if (amountStored < 0) {
-			amountStored = 0;
-		}
-		setFluidStored(stack, amountStored);
-	}
+            if (level.getFluidState(pos).is(Fluids.WATER) && level.getFluidState(pos).isSource()) {
+                if (!level.isClientSide) {
+                    level.setBlock(pos, Blocks.AIR.defaultBlockState(), 11);
+                    setFluidStored(stack, Math.min(currentFluid + 1000, maxFluid));
+                }
+                level.playSound(player, pos, SoundEvents.BUCKET_FILL, SoundSource.PLAYERS, 1.0F, 1.0F);
+                return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+            }
 
-	private void init(ItemStack stack) {
-		if (!stack.hasTagCompound()) {
-			stack.setTagCompound(new NBTTagCompound());
-		}
-		NBTTagCompound nbt = stack.getTagCompound();
-		if (!nbt.hasKey(TAG_FLUID_STORED)) {
-			nbt.setInteger(TAG_FLUID_STORED, 0);
-		}
-		if (!nbt.hasKey(TAG_TIME)) {
-			nbt.setInteger(TAG_TIME, 100);
-		}
-	}
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be != null) {
+                LazyOptional<IFluidHandler> cap = be.getCapability(ForgeCapabilities.FLUID_HANDLER, hit.getDirection());
+                if (cap.isPresent()) {
+                    IFluidHandler handler = cap.orElse(null);
+                    if (handler != null) {
+                        FluidStack drained = handler.drain(new FluidStack(Fluids.WATER, 1000), IFluidHandler.FluidAction.SIMULATE);
+                        if (!drained.isEmpty() && drained.getAmount() > 0) {
+                            if (!level.isClientSide) {
+                                handler.drain(drained, IFluidHandler.FluidAction.EXECUTE);
+                                setFluidStored(stack, Math.min(currentFluid + drained.getAmount(), maxFluid));
+                            }
+                            level.playSound(player, pos, SoundEvents.BUCKET_FILL, SoundSource.PLAYERS, 1.0F, 1.0F);
+                            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+                        }
+                    }
+                }
+            }
+        }
 
-	private void doTick(Entity entity, ItemStack stack) {
-		if (entity instanceof EntityPlayer && SyncedConfig.getBooleanValue(GameplayOption.ENABLE_THIRST)) {
-			int energyPerTick = Options.THIRST_QUNCHER_RF_PER_TICK;
-			if (Options.REQUIRE_ENERGY && (getEnergyStored(stack) < energyPerTick || getFluidStored(stack) < 100)) {
-				return;
-			}
-			EntityPlayer player = (EntityPlayer) entity;
-			ThirstHandler thirstHandler = (ThirstHandler) ThirstHelper.getThirstData(player);
-			int currentThirst = thirstHandler.getThirst();
-			int currentTime = getTime(stack);
-			if (currentThirst < 20) {
-				if (currentTime <= 0) {
-					player.removePotionEffect(TANPotions.thirst);
-					if (currentThirst < 20) {
-						thirstHandler.setThirst(currentThirst + 1);
-						thirstHandler.setHydration(5.0F);
-						thirstHandler.setExhaustion(0.0F);
-					}
-					drainFluid(stack, 100);
-					setTime(stack, 50);
-					if (Options.REQUIRE_ENERGY) {
-						setEnergyStored(stack, getEnergyStored(stack) - energyPerTick);
-					}
-				}
-				else {
-					setTime(stack, currentTime - 1);
-					if (Options.REQUIRE_ENERGY) {
-						setEnergyStored(stack, getEnergyStored(stack) - energyPerTick);
-					}
-				}
-			}
-			else {
-				if (getTime(stack) != 50) {
-					setTime(stack, 50);
-				}
-			}
-		}
-	}
+        return InteractionResultHolder.pass(stack);
+    }
 
-	@Override
-	public ActionResult<ItemStack> onItemRightClick(World worldIn, EntityPlayer playerIn, EnumHand hand) {
+    private int getTime(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : 20;
+    }
 
-		ItemStack stack = playerIn.getHeldItemMainhand();
-		if (stack.isEmpty()) {
-			return new ActionResult<ItemStack>(EnumActionResult.FAIL, stack);
-		}
-		init(stack);
-		if (getFluidStored(stack) >= FLUID_CAPACITY) {
-			return new ActionResult<ItemStack>(EnumActionResult.FAIL, stack);
-		}
-		RayTraceResult ray = rayTrace(worldIn, playerIn, true);
-		if (ray == null || ray.typeOfHit == null || hand == null) {
-			return new ActionResult<ItemStack>(EnumActionResult.FAIL, stack);
-		}
-		if (ray.typeOfHit == RayTraceResult.Type.BLOCK && hand == EnumHand.MAIN_HAND && !worldIn.isRemote) {
-			BlockPos blockpos = ray.getBlockPos();
-			IBlockState iblockstate = worldIn.getBlockState(blockpos);
-			Material material = iblockstate.getMaterial();
+    private void setTime(ItemStack stack, int time) {
+        stack.getOrCreateTag().putInt(TAG_TIME, time);
+    }
 
-			if (material == Material.WATER && iblockstate.getValue(BlockLiquid.LEVEL).intValue() == 0) {
-				worldIn.setBlockState(blockpos, Blocks.AIR.getDefaultState(), 11);
-				playerIn.addStat(StatList.getObjectUseStats(this));
-				playerIn.playSound(SoundEvents.ITEM_BUCKET_FILL, 1.0F, 1.0F);
-				setFluidStored(stack, Math.min(getFluidStored(stack) + 1000, FLUID_CAPACITY));
-				return new ActionResult<ItemStack>(EnumActionResult.SUCCESS, stack);
-			}
-			else if (iblockstate.getBlock().hasTileEntity(iblockstate) && worldIn.getTileEntity(blockpos).hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, ray.sideHit)) {
-				IFluidHandler fluidHandler = worldIn.getTileEntity(blockpos).getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, ray.sideHit);
-				for (IFluidTankProperties property : fluidHandler.getTankProperties()) {
-					Fluid containedFluid = property.getContents().getFluid();
-					if ((containedFluid == FluidRegistry.WATER || containedFluid == PurifiedWaterFluid.instance) && property.getContents().amount >= 1000 && property.canDrain()) {
-						fluidHandler.drain(new FluidStack(FluidRegistry.WATER, 1000), true);
-						setFluidStored(stack, Math.min(getFluidStored(stack) + 1000, FLUID_CAPACITY));
-					}
-				}
-			}
+    private void setActive(ItemStack stack, boolean active) {
+        stack.getOrCreateTag().putBoolean(TAG_ACTIVE, active);
+    }
 
-		}
-		return new ActionResult<ItemStack>(EnumActionResult.FAIL, stack);
-	}
+    public boolean isActive(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null && tag.getBoolean(TAG_ACTIVE);
+    }
 
-	@Override
-	public boolean hasEffect(ItemStack stack) {
-		return getTime(stack) < 50 && (!Options.REQUIRE_ENERGY || getEnergyStored(stack) > 10);
-	}
+    @Override
+    public boolean isFoil(ItemStack stack) {
+        return isActive(stack) && (!ModConfig.COMMON.requireEnergy.get() || getEnergyStored(stack) > ModConfig.COMMON.thirstQuencherRFPerTick.get());
+    }
 
-	@Override
-	public boolean shouldCauseReequipAnimation(ItemStack oldStack, ItemStack newStack, boolean slotChanged) {
-		if (oldStack.getItem() == newStack.getItem()) {
-			return false;
-		}
-		return slotChanged;
-	}
+    @Override
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        if (ModConfig.COMMON.requireEnergy.get()) {
+            String energyStr = ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyStored(stack))
+                    + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(capacity) + " FE";
+            tooltip.add(Component.literal(energyStr).withStyle(ChatFormatting.ITALIC, ChatFormatting.GOLD));
+        }
 
-	@SideOnly(Side.CLIENT)
-	@Override
-	public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip, ITooltipFlag advanced) {
-		if (Options.REQUIRE_ENERGY) {
-			tooltip.add(ChatFormatting.ITALIC + "" + ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyStored(stack)) + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(getMaxEnergyStored(stack)) + " Energy");
-		}
-		tooltip.add("Stored Water: " + getFluidStored(stack) + "/" + FLUID_CAPACITY + " mB");
-		tooltip.add("");
-		tooltip.add(I18n.format("tooltip.tanaddons.thirstquencher.desc"));
-		String requirementMessage = I18n.format("tooltip.tanaddons.thirstquencher.desc2");
-		if (Options.REQUIRE_ENERGY) {
-			requirementMessage += " " + I18n.format("tooltip.tanaddons.thirstquencher.desc4");
-		}
-		//requirementMessage += " " + I18n.format("tooltip.tanaddons.thirstquencher.desc4");
-		tooltip.add(requirementMessage + " " + I18n.format("tooltip.tanaddons.thirstquencher.desc5"));
-		//tooltip.add(I18n.format("tooltip.tanaddons.thirstquencher.desc3"));
-		if (Loader.isModLoaded(ModGlobals.MODID_BAUBLES)) {
-			tooltip.add(I18n.format("tooltip.tanaddons.baublesitem", "any"));
-		}
-	}
+        String fluidStr = "Stored Water: " + getFluidStored(stack) + "/" + getFluidCapacity() + " mB";
+        tooltip.add(Component.literal(fluidStr).withStyle(ChatFormatting.AQUA));
+        tooltip.add(Component.empty());
 
-	@Override
-	public void onUpdate(ItemStack stack, World worldIn, Entity entityIn, int itemSlot, boolean isSelected) {
-		if (!worldIn.isRemote) {
-			doTick(entityIn, stack);
-		}
-	}
+        tooltip.add(Component.translatable("tooltip.tanaddons.thirstquencher.desc").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.tanaddons.thirstquencher.desc2").withStyle(ChatFormatting.DARK_GRAY));
+        tooltip.add(Component.translatable("tooltip.tanaddons.thirstquencher.desc3").withStyle(ChatFormatting.DARK_GRAY));
 
-	@Override
-	@Method(modid = MODID_BAUBLES)
-	public BaubleType getBaubleType(ItemStack stack) {
-		return BaubleType.TRINKET;
-	}
+        if (CompatManager.isCuriosLoaded()) {
+            tooltip.add(Component.translatable("tooltip.tanaddons.baublesitem", "Curios").withStyle(ChatFormatting.BLUE));
+        }
+    }
 
-	@Override
-	@Method(modid = MODID_BAUBLES)
-	public void onWornTick(ItemStack stack, EntityLivingBase player) {
-		if (!player.getEntityWorld().isRemote) {
-			doTick(player, stack);
-		}
-	}
+    @Override
+    public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
+        ICapabilityProvider energyProvider = super.initCapabilities(stack, nbt);
+        LazyOptional<IFluidHandlerItem> fluidHolder = LazyOptional.of(() -> new IFluidHandlerItem() {
+            @Nonnull
+            @Override
+            public ItemStack getContainer() {
+                return stack;
+            }
 
-	@Override
-	@Method(modid = MODID_BAUBLES)
-	public boolean willAutoSync(ItemStack itemstack, EntityLivingBase player) {
-		return true;
-	}
+            @Override
+            public int getTanks() {
+                return 1;
+            }
 
-	public static class FluidHandlerItemStackSettable extends FluidHandlerItemStack {
+            @Nonnull
+            @Override
+            public FluidStack getFluidInTank(int tank) {
+                return new FluidStack(Fluids.WATER, getFluidStored(stack));
+            }
 
-		ItemThirstQuencher item;
+            @Override
+            public int getTankCapacity(int tank) {
+                return getFluidCapacity();
+            }
 
-		public FluidHandlerItemStackSettable(ItemStack container, int capacity) {
-			super(container, capacity);
-			if (container.getItem() instanceof ItemThirstQuencher) {
-				item = (ItemThirstQuencher) container.getItem();
-			}
-		}
+            @Override
+            public boolean isFluidValid(int tank, @Nonnull FluidStack resource) {
+                return !resource.isEmpty() && resource.getFluid() == Fluids.WATER;
+            }
 
-		@Override
-		public FluidStack getFluid() {
-			return new FluidStack(FluidRegistry.WATER, item.getFluidStored(getContainer()));
-		}
+            @Override
+            public int fill(FluidStack resource, FluidAction action) {
+                if (resource.isEmpty() || resource.getFluid() != Fluids.WATER) {
+                    return 0;
+                }
+                int stored = getFluidStored(stack);
+                int accepted = Math.min(getFluidCapacity() - stored, resource.getAmount());
+                if (action.execute() && accepted > 0) {
+                    setFluidStored(stack, stored + accepted);
+                }
+                return accepted;
+            }
 
-		@Override
-		public int fill(FluidStack resource, boolean doFill) {
-			if (getContainer().getCount() != 1 || resource == null || resource.amount <= 0 || !canFillFluidType(resource)) {
-				return 0;
-			}
+            @Nonnull
+            @Override
+            public FluidStack drain(FluidStack resource, FluidAction action) {
+                if (resource.isEmpty() || resource.getFluid() != Fluids.WATER) {
+                    return FluidStack.EMPTY;
+                }
+                return drain(resource.getAmount(), action);
+            }
 
-			FluidStack contained = getFluid();
-			if (contained == null) {
-				int fillAmount = Math.min(item.FLUID_CAPACITY, resource.amount);
+            @Nonnull
+            @Override
+            public FluidStack drain(int maxDrain, FluidAction action) {
+                int stored = getFluidStored(stack);
+                int drained = Math.min(stored, maxDrain);
+                if (action.execute() && drained > 0) {
+                    setFluidStored(stack, stored - drained);
+                }
+                return drained > 0 ? new FluidStack(Fluids.WATER, drained) : FluidStack.EMPTY;
+            }
+        });
 
-				FluidStack filled = resource.copy();
-				if (doFill) {
-					filled.amount = fillAmount;
-					setFluid(filled);
-				}
-				setFluidStored(filled.amount);
-				return fillAmount;
-			}
-			else {
-				if (!contained.isFluidEqual(resource)) {
-					resource = new FluidStack(contained, resource.amount);
-				}
-				int fillAmount = Math.min(item.FLUID_CAPACITY - contained.amount, resource.amount);
+        ICapabilityProvider curioProvider = CompatManager.isCuriosLoaded()
+                ? CuriosCompat.initCuriosProvider(stack, player -> doTick(player, stack))
+                : null;
 
-				if (doFill && fillAmount > 0) {
-					contained.amount += fillAmount;
-					setFluid(contained);
-				}
-				setFluidStored(contained.amount);
-				return fillAmount;
-
-			}
-		}
-
-		@Override
-		public boolean canFillFluidType(FluidStack stack) {
-			Fluid fluid = stack.getFluid();
-			return fluid == FluidRegistry.WATER || fluid == PurifiedWaterFluid.instance;
-		}
-
-		public int getFluidStored() {
-			init(getContainer());
-			return getContainer().getTagCompound().getInteger(TAG_FLUID_STORED);
-		}
-
-		private void setFluidStored(int amount) {
-			init(getContainer());
-			getContainer().getTagCompound().setInteger(TAG_FLUID_STORED, amount);
-		}
-
-		private void init(ItemStack stack) {
-			if (!stack.hasTagCompound()) {
-				stack.setTagCompound(new NBTTagCompound());
-			}
-			NBTTagCompound nbt = stack.getTagCompound();
-			if (!nbt.hasKey(ItemThirstQuencher.TAG_FLUID_STORED)) {
-				nbt.setInteger(TAG_FLUID_STORED, 0);
-			}
-			if (!nbt.hasKey(TAG_TIME)) {
-				nbt.setInteger(TAG_TIME, 100);
-			}
-		}
-
-	}
-
+        return new ICapabilityProvider() {
+            @Nonnull
+            @Override
+            public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
+                if (cap == ForgeCapabilities.ENERGY) {
+                    return energyProvider.getCapability(cap, side);
+                }
+                if (cap == ForgeCapabilities.FLUID_HANDLER_ITEM) {
+                    return fluidHolder.cast();
+                }
+                if (curioProvider != null) {
+                    LazyOptional<T> curioCap = curioProvider.getCapability(cap, side);
+                    if (curioCap.isPresent()) {
+                        return curioCap;
+                    }
+                }
+                return LazyOptional.empty();
+            }
+        };
+    }
 }

@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "tanaddons:portable_temp_regulator",
+    "tanaddons:thirst_quencher"
+  ]
+}

@@ -1,174 +1,147 @@
 package p455w0rd.tanaddons.items;
 
-import static p455w0rd.tanaddons.init.ModGlobals.MODID_BAUBLES;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.common.capabilities.ICapabilityProvider;
+import net.minecraftforge.common.util.LazyOptional;
+import p455w0rd.tanaddons.compat.CompatManager;
+import p455w0rd.tanaddons.compat.curios.CuriosCompat;
+import p455w0rd.tanaddons.init.ModConfig;
+import p455w0rd.tanaddons.util.ReadableNumberConverter;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.List;
 
-import javax.annotation.Nullable;
+public class ItemTempRegulator extends ItemForgeEnergy {
 
-import com.mojang.realmsclient.gui.ChatFormatting;
+    public static final String TAG_TIME = "TimeStart";
+    public static final String TAG_ACTIVE = "Active";
 
-import baubles.api.BaubleType;
-import baubles.api.IBauble;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.client.util.ITooltipFlag;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.world.World;
-import net.minecraftforge.fml.common.Loader;
-import net.minecraftforge.fml.common.Optional.Interface;
-import net.minecraftforge.fml.common.Optional.Method;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
-import p455w0rd.tanaddons.init.ModConfig.Options;
-import p455w0rd.tanaddons.init.ModCreativeTab;
-import p455w0rd.tanaddons.init.ModGlobals;
-import p455w0rdslib.util.ReadableNumberConverter;
-import toughasnails.api.TANPotions;
-import toughasnails.api.config.GameplayOption;
-import toughasnails.api.config.SyncedConfig;
-import toughasnails.api.stat.capability.ITemperature;
-import toughasnails.api.temperature.Temperature;
-import toughasnails.api.temperature.TemperatureHelper;
-import toughasnails.temperature.TemperatureHandler;
+    public ItemTempRegulator() {
+        super(ModConfig.COMMON.portableTempRegulatorRFCapacity.get(),
+              ModConfig.COMMON.portableTempRegulatorRFCapacity.get(),
+              ModConfig.COMMON.portableTempRegulatorRFPerTick.get() * 2);
+    }
 
-/**
- * @author p455w0rd
- *
- */
-@Interface(iface = "baubles.api.IBauble", modid = MODID_BAUBLES, striprefs = true)
-public class ItemTempRegulator extends ItemForgeEnergy implements IBauble {
+    public void doTick(Player player, ItemStack stack) {
+        if (player.level().isClientSide) {
+            return;
+        }
 
-	private static final String NAME = "portable_temp_regulator";
-	private final String TAG_TIME = "TimeStart";
+        boolean requireEnergy = ModConfig.COMMON.requireEnergy.get();
+        int energyPerTick = ModConfig.COMMON.portableTempRegulatorRFPerTick.get();
 
-	public ItemTempRegulator() {
-		super(Options.PORTABLE_TEMP_REGULATOR_CAPACITY, Options.PORTABLE_TEMP_REGULATOR_CAPACITY, 40, NAME);
-		setCreativeTab(ModCreativeTab.TAB);
-	}
+        if (requireEnergy && getEnergyStored(stack) < energyPerTick) {
+            setActive(stack, false);
+            return;
+        }
 
-	private void init(ItemStack stack) {
-		if (!stack.hasTagCompound()) {
-			stack.setTagCompound(new NBTTagCompound());
-		}
-		NBTTagCompound nbt = stack.getTagCompound();
-		if (!nbt.hasKey(TAG_TIME)) {
-			nbt.setInteger(TAG_TIME, 100);
-		}
-	}
+        if (CompatManager.isPlayerTemperatureAbnormal(player)) {
+            setActive(stack, true);
+            int currentTime = getTime(stack);
+            if (currentTime <= 0) {
+                CompatManager.regulateTemperature(player);
+                setTime(stack, 20);
+            }
+            else {
+                setTime(stack, currentTime - 1);
+            }
 
-	private void doTick(Entity entity, ItemStack stack) {
-		init(stack);
-		int energy = Options.PORTABLE_TEMP_REGULATOR_RF_PER_TICK;
-		if (entity instanceof EntityPlayer && SyncedConfig.getBooleanValue(GameplayOption.ENABLE_TEMPERATURE)) {
-			if (Options.REQUIRE_ENERGY && getEnergyStored(stack) < energy) {
-				return;
-			}
+            if (requireEnergy) {
+                setEnergyStored(stack, getEnergyStored(stack) - energyPerTick);
+            }
+        }
+        else {
+            setActive(stack, false);
+            if (getTime(stack) != 20) {
+                setTime(stack, 20);
+            }
+        }
+    }
 
-			EntityPlayer player = (EntityPlayer) entity;
-			TemperatureHandler tempHandler = (TemperatureHandler) TemperatureHelper.getTemperatureData(player);
-			ITemperature data = TemperatureHelper.getTemperatureData(player);
-			Temperature playerTemp = data.getTemperature();
-			int currentTemp = playerTemp.getRawValue();
-			int currentTime = getTime(stack);
-			if (currentTemp != 14) {
-				if (currentTime <= 0) {
-					tempHandler.setChangeTime(1);
-					player.removePotionEffect(TANPotions.hypothermia);
-					player.removePotionEffect(TANPotions.hyperthermia);
-					if (currentTemp < 14) {
-						tempHandler.setTemperature(new Temperature(currentTemp + 1));
-					}
-					else if (currentTemp > 14) {
-						tempHandler.setTemperature(new Temperature(currentTemp - 1));
-					}
-					setTime(stack, 100);
-					if (Options.REQUIRE_ENERGY) {
-						setEnergyStored(stack, getEnergyStored(stack) - energy);
-					}
-				}
-				else {
-					setTime(stack, currentTime - 1);
-					if (Options.REQUIRE_ENERGY) {
-						setEnergyStored(stack, getEnergyStored(stack) - energy);
-					}
-				}
-			}
-			else {
-				if (getTime(stack) != 100) {
-					setTime(stack, 100);
-				}
-			}
-		}
-	}
+    @Override
+    public void inventoryTick(ItemStack stack, Level level, Entity entity, int slot, boolean isSelected) {
+        if (!level.isClientSide && entity instanceof Player player) {
+            doTick(player, stack);
+        }
+    }
 
-	@Override
-	public boolean hasEffect(ItemStack stack) {
-		return getTime(stack) < 100 && (!Options.REQUIRE_ENERGY || getEnergyStored(stack) > Options.PORTABLE_TEMP_REGULATOR_RF_PER_TICK);
-	}
+    private int getTime(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : 20;
+    }
 
-	private int getTime(ItemStack stack) {
-		init(stack);
-		return stack.getTagCompound().getInteger(TAG_TIME);
-	}
+    private void setTime(ItemStack stack, int time) {
+        stack.getOrCreateTag().putInt(TAG_TIME, time);
+    }
 
-	private void setTime(ItemStack stack, int amount) {
-		init(stack);
-		stack.getTagCompound().setInteger(TAG_TIME, amount);
-	}
+    private void setActive(ItemStack stack, boolean active) {
+        stack.getOrCreateTag().putBoolean(TAG_ACTIVE, active);
+    }
 
-	@Override
-	public boolean shouldCauseReequipAnimation(ItemStack oldStack, ItemStack newStack, boolean slotChanged) {
-		if (oldStack.getItem() == newStack.getItem()) {
-			return false;
-		}
-		return super.shouldCauseReequipAnimation(oldStack, newStack, slotChanged);
-	}
+    public boolean isActive(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null && tag.getBoolean(TAG_ACTIVE);
+    }
 
-	@SideOnly(Side.CLIENT)
-	@Override
-	public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip, ITooltipFlag advanced) {
-		if (Options.REQUIRE_ENERGY) {
-			tooltip.add(ChatFormatting.ITALIC + "" + ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyStored(stack)) + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(getMaxEnergyStored(stack)) + " Energy");
-			tooltip.add("");
-		}
-		tooltip.add(I18n.format("tooltip.tanaddons.ptempregulator.desc"));
-		if (Options.REQUIRE_ENERGY) {
-			tooltip.add(I18n.format("tooltip.tanaddons.ptempregulator.desc2"));
-		}
-		if (Loader.isModLoaded(ModGlobals.MODID_BAUBLES)) {
-			tooltip.add(I18n.format("tooltip.tanaddons.baublesitem", "any"));
-		}
-	}
+    @Override
+    public boolean isFoil(ItemStack stack) {
+        return isActive(stack) && (!ModConfig.COMMON.requireEnergy.get() || getEnergyStored(stack) > ModConfig.COMMON.portableTempRegulatorRFPerTick.get());
+    }
 
-	@Override
-	public void onUpdate(ItemStack stack, World worldIn, Entity entityIn, int itemSlot, boolean isSelected) {
-		if (!worldIn.isRemote) {
-			doTick(entityIn, stack);
-		}
-	}
+    @Override
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        if (ModConfig.COMMON.requireEnergy.get()) {
+            String energyStr = ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyStored(stack))
+                    + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(capacity) + " FE";
+            tooltip.add(Component.literal(energyStr).withStyle(ChatFormatting.ITALIC, ChatFormatting.GOLD));
+            tooltip.add(Component.empty());
+        }
 
-	@Override
-	@Method(modid = MODID_BAUBLES)
-	public BaubleType getBaubleType(ItemStack stack) {
-		return BaubleType.TRINKET;
-	}
+        tooltip.add(Component.translatable("tooltip.tanaddons.ptempregulator.desc").withStyle(ChatFormatting.GRAY));
+        if (ModConfig.COMMON.requireEnergy.get()) {
+            tooltip.add(Component.translatable("tooltip.tanaddons.ptempregulator.desc2").withStyle(ChatFormatting.DARK_GRAY));
+        }
 
-	@Override
-	@Method(modid = MODID_BAUBLES)
-	public void onWornTick(ItemStack stack, EntityLivingBase player) {
-		if (!player.getEntityWorld().isRemote) {
-			doTick(player, stack);
-		}
-	}
+        if (CompatManager.isCuriosLoaded()) {
+            tooltip.add(Component.translatable("tooltip.tanaddons.baublesitem", "Curios").withStyle(ChatFormatting.BLUE));
+        }
+    }
 
-	@Override
-	@Method(modid = MODID_BAUBLES)
-	public boolean willAutoSync(ItemStack itemstack, EntityLivingBase player) {
-		return true;
-	}
+    @Override
+    public ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
+        ICapabilityProvider energyProvider = super.initCapabilities(stack, nbt);
+        ICapabilityProvider curioProvider = CompatManager.isCuriosLoaded()
+                ? CuriosCompat.initCuriosProvider(stack, player -> doTick(player, stack))
+                : null;
 
+        if (curioProvider == null) {
+            return energyProvider;
+        }
+
+        return new ICapabilityProvider() {
+            @Nonnull
+            @Override
+            public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
+                if (cap == ForgeCapabilities.ENERGY) {
+                    return energyProvider.getCapability(cap, side);
+                }
+                LazyOptional<T> curioCap = curioProvider.getCapability(cap, side);
+                if (curioCap.isPresent()) {
+                    return curioCap;
+                }
+                return LazyOptional.empty();
+            }
+        };
+    }
 }

@@ -1,0 +1,24 @@
+{
+  "block.tanaddons.temp_regulator": "Temperature Regulator",
+  "item.tanaddons.temp_regulator": "Temperature Regulator",
+  "item.tanaddons.portable_temp_regulator": "Portable Temperature Regulator",
+  "item.tanaddons.thirst_quencher": "Thirst Quencher",
+
+  "itemGroup.tanaddons": "Tough Expansion",
+
+  "tooltip.tanaddons.thirstquencher.desc": "Right-click on a water source block or fluid tank with water to fill",
+  "tooltip.tanaddons.thirstquencher.desc2": "Requires water and Forge Energy to run.",
+  "tooltip.tanaddons.thirstquencher.desc3": "Automatically purifies water and quenches thirst.",
+  "tooltip.tanaddons.ptempregulator.desc": "Keeps player temperature at optimal comfortable level.",
+  "tooltip.tanaddons.ptempregulator.desc2": "Requires Forge Energy to function.",
+  "tooltip.tanaddons.baublesitem": "Can be equipped in %s accessory slot.",
+  "tooltip.tanaddons.redstone_rclick.desc": "Right-click with empty hand to change Redstone Mode",
+  "tooltip.tanaddons.redstone_rclick.desc2": "(Crouch + Right-click for energy info)",
+  "tooltip.tanaddons.redstone_mode": "Redstone Mode",
+  "tooltip.tanaddons.energy": "Energy",
+  "tooltip.tanaddons.energy2": "Energy/tick per player while adjusting temp",
+
+  "message.tanaddons.redstonerequired": "Redstone Mode: Requires redstone signal",
+  "message.tanaddons.noredstonerequired": "Redstone Mode: Requires no redstone signal",
+  "message.tanaddons.redstoneignored": "Redstone Mode: Redstone ignored (Always Active)"
+}
