@@ -49,6 +49,21 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
               ModConfig.COMMON.thirstQuencherRFPerTick.get() * 2);
     }
 
+    @Override
+    public int getEnergyCapacity() {
+        return ModConfig.COMMON.thirstQuencherRFCapacity.get();
+    }
+
+    @Override
+    public int getMaxReceive() {
+        return ModConfig.COMMON.thirstQuencherRFCapacity.get();
+    }
+
+    @Override
+    public int getMaxExtract() {
+        return ModConfig.COMMON.thirstQuencherRFPerTick.get() * 2;
+    }
+
     public int getFluidCapacity() {
         return ModConfig.COMMON.thirstQuencherWaterCapacity.get();
     }
@@ -185,7 +200,7 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         if (ModConfig.COMMON.requireEnergy.get()) {
             String energyStr = ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyStored(stack))
-                    + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(capacity) + " FE";
+                    + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyCapacity()) + " FE";
             tooltip.add(Component.literal(energyStr).withStyle(ChatFormatting.ITALIC, ChatFormatting.GOLD));
         }
 

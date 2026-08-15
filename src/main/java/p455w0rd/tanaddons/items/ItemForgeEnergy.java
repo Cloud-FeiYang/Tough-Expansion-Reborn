@@ -2,24 +2,18 @@ package p455w0rd.tanaddons.items;
 
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.level.Level;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.energy.EnergyStorage;
 import net.minecraftforge.energy.IEnergyStorage;
 import p455w0rd.tanaddons.init.ModConfig;
-import p455w0rd.tanaddons.util.ReadableNumberConverter;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.List;
 
 public class ItemForgeEnergy extends Item {
 
@@ -39,19 +33,28 @@ public class ItemForgeEnergy extends Item {
         return capacity;
     }
 
+    public int getMaxReceive() {
+        return maxReceive;
+    }
+
+    public int getMaxExtract() {
+        return maxExtract;
+    }
+
     public int getEnergyStored(ItemStack stack) {
         CompoundTag tag = stack.getTag();
         return tag != null ? tag.getInt(TAG_ENERGY) : 0;
     }
 
     public void setEnergyStored(ItemStack stack, int energy) {
-        int clamped = Math.max(0, Math.min(capacity, energy));
+        int clamped = Math.max(0, Math.min(getEnergyCapacity(), energy));
         stack.getOrCreateTag().putInt(TAG_ENERGY, clamped);
     }
 
     public int receiveEnergy(ItemStack stack, int maxReceive, boolean simulate) {
         int stored = getEnergyStored(stack);
-        int energyReceived = Math.min(capacity - stored, Math.min(this.maxReceive, maxReceive));
+        int cap = getEnergyCapacity();
+        int energyReceived = Math.min(cap - stored, Math.min(getMaxReceive(), maxReceive));
         if (!simulate && energyReceived > 0) {
             setEnergyStored(stack, stored + energyReceived);
         }
@@ -60,7 +63,7 @@ public class ItemForgeEnergy extends Item {
 
     public int extractEnergy(ItemStack stack, int maxExtract, boolean simulate) {
         int stored = getEnergyStored(stack);
-        int energyExtracted = Math.min(stored, Math.min(this.maxExtract, maxExtract));
+        int energyExtracted = Math.min(stored, Math.min(getMaxExtract(), maxExtract));
         if (!simulate && energyExtracted > 0) {
             setEnergyStored(stack, stored - energyExtracted);
         }
@@ -74,12 +77,14 @@ public class ItemForgeEnergy extends Item {
 
     @Override
     public int getBarWidth(ItemStack stack) {
-        return Math.round(13.0F * (float) getEnergyStored(stack) / (float) capacity);
+        int cap = getEnergyCapacity();
+        return cap > 0 ? Math.round(13.0F * (float) getEnergyStored(stack) / (float) cap) : 0;
     }
 
     @Override
     public int getBarColor(ItemStack stack) {
-        float f = Math.max(0.0F, (float) getEnergyStored(stack) / (float) capacity);
+        int cap = getEnergyCapacity();
+        float f = cap > 0 ? Math.max(0.0F, (float) getEnergyStored(stack) / (float) cap) : 0.0F;
         return Mth.hsvToRgb(f / 3.0F, 1.0F, 1.0F);
     }
 

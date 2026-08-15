@@ -33,6 +33,21 @@ public class ItemTempRegulator extends ItemForgeEnergy {
               ModConfig.COMMON.portableTempRegulatorRFPerTick.get() * 2);
     }
 
+    @Override
+    public int getEnergyCapacity() {
+        return ModConfig.COMMON.portableTempRegulatorRFCapacity.get();
+    }
+
+    @Override
+    public int getMaxReceive() {
+        return ModConfig.COMMON.portableTempRegulatorRFCapacity.get();
+    }
+
+    @Override
+    public int getMaxExtract() {
+        return ModConfig.COMMON.portableTempRegulatorRFPerTick.get() * 2;
+    }
+
     public void doTick(Player player, ItemStack stack) {
         if (player.level().isClientSide) {
             return;
@@ -103,7 +118,7 @@ public class ItemTempRegulator extends ItemForgeEnergy {
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         if (ModConfig.COMMON.requireEnergy.get()) {
             String energyStr = ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyStored(stack))
-                    + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(capacity) + " FE";
+                    + "/" + ReadableNumberConverter.INSTANCE.toWideReadableForm(getEnergyCapacity()) + " FE";
             tooltip.add(Component.literal(energyStr).withStyle(ChatFormatting.ITALIC, ChatFormatting.GOLD));
             tooltip.add(Component.empty());
         }

@@ -47,7 +47,7 @@ public class ModConfig {
 
             portableTempRegulatorRFCapacity = builder
                     .comment("FE storage capacity of the Portable Temperature Regulator")
-                    .defineInRange("rfCapacity", 400000, 1000, 100000000);
+                    .defineInRange("rfCapacity", 500000, 1000, 100000000);
 
             portableTempRegulatorRFPerTick = builder
                     .comment("FE consumed per tick while regulating player temperature")
@@ -59,15 +59,15 @@ public class ModConfig {
 
             thirstQuencherRFCapacity = builder
                     .comment("FE storage capacity of the Thirst Quencher")
-                    .defineInRange("rfCapacity", 400000, 1000, 100000000);
+                    .defineInRange("rfCapacity", 500000, 1000, 100000000);
 
             thirstQuencherRFPerTick = builder
                     .comment("FE consumed per tick while quenching player thirst")
                     .defineInRange("rfPerTick", 20, 0, 100000);
 
             thirstQuencherWaterCapacity = builder
-                    .comment("Internal water storage capacity in mB (default 8000 = 8 buckets)")
-                    .defineInRange("waterCapacity", 8000, 1000, 64000);
+                    .comment("Internal water storage capacity in mB (default 5000 = 5 buckets)")
+                    .defineInRange("waterCapacity", 5000, 1000, 64000);
 
             builder.pop();
         }
