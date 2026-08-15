@@ -1,13 +1,13 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "BCB",
+    "WCW",
     "LIL",
     "ORO"
   ],
   "key": {
-    "B": {
-      "item": "minecraft:blue_ice"
+    "W": {
+      "item": "minecraft:water_bucket"
     },
     "C": {
       "item": "minecraft:comparator"
