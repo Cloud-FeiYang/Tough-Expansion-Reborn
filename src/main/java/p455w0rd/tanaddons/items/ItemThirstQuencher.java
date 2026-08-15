@@ -42,6 +42,7 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
     public static final String TAG_FLUID_STORED = "FluidStored";
     public static final String TAG_TIME = "TimeStart";
     public static final String TAG_ACTIVE = "Active";
+    public static final int COOLDOWN_TICKS = 60;
 
     public ItemThirstQuencher() {
         super(ModConfig.COMMON.thirstQuencherRFCapacity.get(),
@@ -101,7 +102,7 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
             if (currentTime <= 0) {
                 CompatManager.quenchThirst(player);
                 drainFluid(stack, 100);
-                setTime(stack, 20);
+                setTime(stack, COOLDOWN_TICKS);
             }
             else {
                 setTime(stack, currentTime - 1);
@@ -113,8 +114,8 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
         }
         else {
             setActive(stack, false);
-            if (getTime(stack) != 20) {
-                setTime(stack, 20);
+            if (getTime(stack) != COOLDOWN_TICKS) {
+                setTime(stack, COOLDOWN_TICKS);
             }
         }
     }
@@ -175,7 +176,7 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
 
     private int getTime(ItemStack stack) {
         CompoundTag tag = stack.getTag();
-        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : 20;
+        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : COOLDOWN_TICKS;
     }
 
     private void setTime(ItemStack stack, int time) {

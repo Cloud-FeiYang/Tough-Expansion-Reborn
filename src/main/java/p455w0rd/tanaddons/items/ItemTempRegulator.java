@@ -26,6 +26,7 @@ public class ItemTempRegulator extends ItemForgeEnergy {
 
     public static final String TAG_TIME = "TimeStart";
     public static final String TAG_ACTIVE = "Active";
+    public static final int COOLDOWN_TICKS = 60;
 
     public ItemTempRegulator() {
         super(ModConfig.COMMON.portableTempRegulatorRFCapacity.get(),
@@ -66,7 +67,7 @@ public class ItemTempRegulator extends ItemForgeEnergy {
             int currentTime = getTime(stack);
             if (currentTime <= 0) {
                 CompatManager.regulateTemperature(player);
-                setTime(stack, 20);
+                setTime(stack, COOLDOWN_TICKS);
             }
             else {
                 setTime(stack, currentTime - 1);
@@ -78,8 +79,8 @@ public class ItemTempRegulator extends ItemForgeEnergy {
         }
         else {
             setActive(stack, false);
-            if (getTime(stack) != 20) {
-                setTime(stack, 20);
+            if (getTime(stack) != COOLDOWN_TICKS) {
+                setTime(stack, COOLDOWN_TICKS);
             }
         }
     }
@@ -93,7 +94,7 @@ public class ItemTempRegulator extends ItemForgeEnergy {
 
     private int getTime(ItemStack stack) {
         CompoundTag tag = stack.getTag();
-        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : 20;
+        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : COOLDOWN_TICKS;
     }
 
     private void setTime(ItemStack stack, int time) {

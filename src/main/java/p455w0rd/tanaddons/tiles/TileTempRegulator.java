@@ -31,6 +31,7 @@ public class TileTempRegulator extends BlockEntity {
 
     public static final String TAG_ENERGY = "Energy";
     public static final String TAG_MODE = "RSMode";
+    public static final int COOLDOWN_TICKS = 60;
 
     private int energy = 0;
     private int mode = 0; // 0 = requires signal, 1 = requires lack of signal, 2 = ignored
@@ -143,7 +144,7 @@ public class TileTempRegulator extends BlockEntity {
                 int timer = tile.getPlayerTimer(player);
                 if (timer <= 0) {
                     CompatManager.regulateTemperature(player);
-                    tile.setPlayerTimer(player, 20);
+                    tile.setPlayerTimer(player, COOLDOWN_TICKS);
                 }
                 else {
                     tile.setPlayerTimer(player, timer - 1);
