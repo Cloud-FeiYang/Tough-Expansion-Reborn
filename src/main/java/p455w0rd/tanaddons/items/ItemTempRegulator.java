@@ -24,9 +24,10 @@ import java.util.List;
 
 public class ItemTempRegulator extends ItemForgeEnergy {
 
-    public static final String TAG_TIME = "TimeStart";
     public static final String TAG_ACTIVE = "Active";
     public static final int COOLDOWN_TICKS = 60;
+    // Energy cost per full cycle (60 ticks × rfPerTick), deducted once per cycle
+    private static final int ENERGY_PER_CYCLE = 60;
 
     public ItemTempRegulator() {
         super(ModConfig.COMMON.portableTempRegulatorRFCapacity.get(),
@@ -50,38 +51,35 @@ public class ItemTempRegulator extends ItemForgeEnergy {
     }
 
     public void doTick(Player player, ItemStack stack) {
-        if (player.level().isClientSide) {
-            return;
-        }
+        if (player.level().isClientSide) return;
 
+        // Optimization 1: Fast-fail — check self conditions first (zero-cost)
         boolean requireEnergy = ModConfig.COMMON.requireEnergy.get();
-        int energyPerTick = ModConfig.COMMON.portableTempRegulatorRFPerTick.get();
-
-        if (requireEnergy && getEnergyStored(stack) < energyPerTick) {
-            setActive(stack, false);
+        int energyCostPerCycle = ModConfig.COMMON.portableTempRegulatorRFPerTick.get() * ENERGY_PER_CYCLE;
+        if (requireEnergy && getEnergyStored(stack) < energyCostPerCycle) {
+            setActiveDirty(stack, false);
             return;
         }
 
-        if (CompatManager.isPlayerTemperatureAbnormal(player)) {
-            setActive(stack, true);
-            int currentTime = getTime(stack);
-            if (currentTime <= 0) {
-                CompatManager.regulateTemperature(player);
-                setTime(stack, COOLDOWN_TICKS);
-            }
-            else {
-                setTime(stack, currentTime - 1);
-            }
-
-            if (requireEnergy) {
-                setEnergyStored(stack, getEnergyStored(stack) - energyPerTick);
-            }
+        // Optimization 2: GameTime modulo — skip 59 out of 60 ticks with zero computation.
+        // Using stack identity hash to spread multiple items across different ticks (load smoothing).
+        long gameTime = player.level().getGameTime();
+        int offset = System.identityHashCode(stack) & 0x3F; // 0..63
+        if ((gameTime + offset) % COOLDOWN_TICKS != 0) {
+            return; // cold-path: no NBT, no reflection, no capability call
         }
-        else {
-            setActive(stack, false);
-            if (getTime(stack) != COOLDOWN_TICKS) {
-                setTime(stack, COOLDOWN_TICKS);
+
+        // Optimization 3: Perform the expensive cross-mod query only at the trigger tick
+        if (CompatManager.isPlayerTemperatureAbnormal(player)) {
+            setActiveDirty(stack, true);
+            CompatManager.regulateTemperature(player);
+
+            // Optimization 4: Batch deduct the full cycle's energy in one NBT write
+            if (requireEnergy) {
+                setEnergyStored(stack, getEnergyStored(stack) - energyCostPerCycle);
             }
+        } else {
+            setActiveDirty(stack, false);
         }
     }
 
@@ -92,17 +90,15 @@ public class ItemTempRegulator extends ItemForgeEnergy {
         }
     }
 
-    private int getTime(ItemStack stack) {
-        CompoundTag tag = stack.getTag();
-        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : COOLDOWN_TICKS;
-    }
-
-    private void setTime(ItemStack stack, int time) {
-        stack.getOrCreateTag().putInt(TAG_TIME, time);
-    }
-
-    private void setActive(ItemStack stack, boolean active) {
-        stack.getOrCreateTag().putBoolean(TAG_ACTIVE, active);
+    /**
+     * Optimization 5: Dirty-check — only write to NBT when the active state actually changes,
+     * preventing unnecessary item slot sync packets.
+     */
+    private void setActiveDirty(ItemStack stack, boolean active) {
+        CompoundTag tag = stack.getOrCreateTag();
+        if (tag.getBoolean(TAG_ACTIVE) != active) {
+            tag.putBoolean(TAG_ACTIVE, active);
+        }
     }
 
     public boolean isActive(ItemStack stack) {
@@ -112,7 +108,7 @@ public class ItemTempRegulator extends ItemForgeEnergy {
 
     @Override
     public boolean isFoil(ItemStack stack) {
-        return isActive(stack) && (!ModConfig.COMMON.requireEnergy.get() || getEnergyStored(stack) > ModConfig.COMMON.portableTempRegulatorRFPerTick.get());
+        return isActive(stack) && (!ModConfig.COMMON.requireEnergy.get() || getEnergyStored(stack) > 0);
     }
 
     @Override
@@ -153,9 +149,7 @@ public class ItemTempRegulator extends ItemForgeEnergy {
                     return energyProvider.getCapability(cap, side);
                 }
                 LazyOptional<T> curioCap = curioProvider.getCapability(cap, side);
-                if (curioCap.isPresent()) {
-                    return curioCap;
-                }
+                if (curioCap.isPresent()) return curioCap;
                 return LazyOptional.empty();
             }
         };

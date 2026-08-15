@@ -22,21 +22,26 @@ import p455w0rd.tanaddons.init.ModBlockEntities;
 import p455w0rd.tanaddons.init.ModConfig;
 
 import javax.annotation.Nonnull;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 public class TileTempRegulator extends BlockEntity {
 
     public static final String TAG_ENERGY = "Energy";
     public static final String TAG_MODE = "RSMode";
-    public static final int COOLDOWN_TICKS = 60;
+
+    /** Entity scan and regulation interval in ticks (3 seconds). */
+    public static final int SCAN_INTERVAL = 60;
 
     private int energy = 0;
     private int mode = 0; // 0 = requires signal, 1 = requires lack of signal, 2 = ignored
 
-    private final Map<UUID, Integer> playerTimers = new HashMap<>();
+    /**
+     * Cached player list from the last AABB scan.
+     * Refreshed every SCAN_INTERVAL ticks to avoid per-tick spatial queries.
+     */
+    private List<Player> cachedPlayers = Collections.emptyList();
+
     private final LazyOptional<IEnergyStorage> energyHolder = LazyOptional.of(this::createEnergyStorage);
 
     public TileTempRegulator(BlockPos pos, BlockState state) {
@@ -48,44 +53,19 @@ public class TileTempRegulator extends BlockEntity {
             @Override
             public int receiveEnergy(int maxReceive, boolean simulate) {
                 int capacity = getMaxEnergyStored();
-                int energyReceived = Math.min(capacity - energy, Math.min(10000, maxReceive));
-                if (!simulate && energyReceived > 0) {
-                    energy += energyReceived;
-                    setChanged();
-                }
-                return energyReceived;
+                int received = Math.min(capacity - energy, Math.min(10000, maxReceive));
+                if (!simulate && received > 0) { energy += received; setChanged(); }
+                return received;
             }
-
-            @Override
-            public int extractEnergy(int maxExtract, boolean simulate) {
-                return 0;
-            }
-
-            @Override
-            public int getEnergyStored() {
-                return energy;
-            }
-
-            @Override
-            public int getMaxEnergyStored() {
-                return ModConfig.COMMON.tempRegulatorRFCapacity.get();
-            }
-
-            @Override
-            public boolean canExtract() {
-                return false;
-            }
-
-            @Override
-            public boolean canReceive() {
-                return true;
-            }
+            @Override public int extractEnergy(int maxExtract, boolean simulate) { return 0; }
+            @Override public int getEnergyStored() { return energy; }
+            @Override public int getMaxEnergyStored() { return ModConfig.COMMON.tempRegulatorRFCapacity.get(); }
+            @Override public boolean canExtract() { return false; }
+            @Override public boolean canReceive() { return true; }
         };
     }
 
-    public int getMode() {
-        return mode;
-    }
+    public int getMode() { return mode; }
 
     public void nextMode() {
         mode = (mode + 1) % 3;
@@ -95,22 +75,12 @@ public class TileTempRegulator extends BlockEntity {
         }
     }
 
-    public int getEnergyStored() {
-        return energy;
-    }
-
-    public int getMaxEnergyStored() {
-        return ModConfig.COMMON.tempRegulatorRFCapacity.get();
-    }
-
-    public int getEnergyUse() {
-        return ModConfig.COMMON.tempRegulatorRFPerTick.get();
-    }
+    public int getEnergyStored() { return energy; }
+    public int getMaxEnergyStored() { return ModConfig.COMMON.tempRegulatorRFCapacity.get(); }
+    public int getEnergyUse() { return ModConfig.COMMON.tempRegulatorRFPerTick.get(); }
 
     public boolean isRunning() {
-        if (level == null) {
-            return false;
-        }
+        if (level == null) return false;
         boolean hasSignal = level.hasNeighborSignal(worldPosition);
         boolean redstoneSatisfied = switch (mode) {
             case 0 -> hasSignal;
@@ -122,66 +92,52 @@ public class TileTempRegulator extends BlockEntity {
     }
 
     public static void tick(Level level, BlockPos pos, BlockState state, TileTempRegulator tile) {
-        if (level.isClientSide) {
-            return;
-        }
+        if (level.isClientSide) return;
 
         boolean running = tile.isRunning();
         if (state.getValue(BlockTempRegulator.ACTIVE) != running) {
             level.setBlock(pos, state.setValue(BlockTempRegulator.ACTIVE, running), 3);
         }
+        if (!running) return;
 
-        if (!running) {
-            return;
+        long gameTime = level.getGameTime();
+
+        // Optimization: Refresh the AABB player scan only every SCAN_INTERVAL ticks.
+        // Between scans, use the cached list (zero spatial query cost).
+        // Offset by block position hash to spread different block entities across ticks.
+        int scanOffset = (pos.getX() * 31 + pos.getZ()) & (SCAN_INTERVAL - 1);
+        if ((gameTime + scanOffset) % SCAN_INTERVAL == 0) {
+            int radius = ModConfig.COMMON.tempRegulatorRadius.get();
+            tile.cachedPlayers = level.getEntitiesOfClass(Player.class, new AABB(pos).inflate(radius));
         }
 
-        int radius = ModConfig.COMMON.tempRegulatorRadius.get();
-        AABB box = new AABB(pos).inflate(radius);
-        List<Player> players = level.getEntitiesOfClass(Player.class, box);
+        if (tile.cachedPlayers.isEmpty()) return;
 
-        for (Player player : players) {
+        // Perform regulation only on the scan tick (same tick we refreshed the list).
+        if ((gameTime + scanOffset) % SCAN_INTERVAL != 0) return;
+
+        boolean requireEnergy = ModConfig.COMMON.requireEnergy.get();
+        // Batch energy cost: rfPerTick × SCAN_INTERVAL per player regulated this cycle.
+        int energyCostPerPlayer = tile.getEnergyUse() * SCAN_INTERVAL;
+
+        for (Player player : tile.cachedPlayers) {
+            if (requireEnergy && tile.energy < energyCostPerPlayer) break;
+
             if (CompatManager.isPlayerTemperatureAbnormal(player)) {
-                int timer = tile.getPlayerTimer(player);
-                if (timer <= 0) {
-                    CompatManager.regulateTemperature(player);
-                    tile.setPlayerTimer(player, COOLDOWN_TICKS);
-                }
-                else {
-                    tile.setPlayerTimer(player, timer - 1);
-                }
-
-                if (ModConfig.COMMON.requireEnergy.get()) {
-                    tile.energy = Math.max(0, tile.energy - tile.getEnergyUse());
+                CompatManager.regulateTemperature(player);
+                if (requireEnergy) {
+                    tile.energy = Math.max(0, tile.energy - energyCostPerPlayer);
                     tile.setChanged();
                 }
             }
-            else {
-                tile.removePlayerTimer(player);
-            }
         }
-    }
-
-    public int getPlayerTimer(Player player) {
-        return playerTimers.getOrDefault(player.getUUID(), 0);
-    }
-
-    public void setPlayerTimer(Player player, int time) {
-        playerTimers.put(player.getUUID(), time);
-    }
-
-    public void removePlayerTimer(Player player) {
-        playerTimers.remove(player.getUUID());
     }
 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        if (tag.contains(TAG_ENERGY)) {
-            energy = tag.getInt(TAG_ENERGY);
-        }
-        if (tag.contains(TAG_MODE)) {
-            mode = tag.getInt(TAG_MODE);
-        }
+        if (tag.contains(TAG_ENERGY)) energy = tag.getInt(TAG_ENERGY);
+        if (tag.contains(TAG_MODE)) mode = tag.getInt(TAG_MODE);
     }
 
     @Override

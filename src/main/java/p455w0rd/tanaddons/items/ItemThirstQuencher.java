@@ -40,9 +40,10 @@ import java.util.List;
 public class ItemThirstQuencher extends ItemForgeEnergy {
 
     public static final String TAG_FLUID_STORED = "FluidStored";
-    public static final String TAG_TIME = "TimeStart";
     public static final String TAG_ACTIVE = "Active";
     public static final int COOLDOWN_TICKS = 60;
+    // Water consumed per full cycle; energy deducted in one batch per cycle
+    public static final int WATER_PER_CYCLE = 100;
 
     public ItemThirstQuencher() {
         super(ModConfig.COMMON.thirstQuencherRFCapacity.get(),
@@ -79,44 +80,37 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
         stack.getOrCreateTag().putInt(TAG_FLUID_STORED, clamped);
     }
 
-    public void drainFluid(ItemStack stack, int amount) {
-        setFluidStored(stack, getFluidStored(stack) - amount);
-    }
-
     public void doTick(Player player, ItemStack stack) {
-        if (player.level().isClientSide) {
-            return;
-        }
+        if (player.level().isClientSide) return;
 
+        // Optimization 1: Fast-fail — check self conditions first (zero cross-mod cost)
         boolean requireEnergy = ModConfig.COMMON.requireEnergy.get();
-        int energyPerTick = ModConfig.COMMON.thirstQuencherRFPerTick.get();
-
-        if ((requireEnergy && getEnergyStored(stack) < energyPerTick) || getFluidStored(stack) < 100) {
-            setActive(stack, false);
+        int energyCostPerCycle = ModConfig.COMMON.thirstQuencherRFPerTick.get() * COOLDOWN_TICKS;
+        if ((requireEnergy && getEnergyStored(stack) < energyCostPerCycle) || getFluidStored(stack) < WATER_PER_CYCLE) {
+            setActiveDirty(stack, false);
             return;
         }
 
-        if (CompatManager.isPlayerThirsty(player)) {
-            setActive(stack, true);
-            int currentTime = getTime(stack);
-            if (currentTime <= 0) {
-                CompatManager.quenchThirst(player);
-                drainFluid(stack, 100);
-                setTime(stack, COOLDOWN_TICKS);
-            }
-            else {
-                setTime(stack, currentTime - 1);
-            }
-
-            if (requireEnergy) {
-                setEnergyStored(stack, getEnergyStored(stack) - energyPerTick);
-            }
+        // Optimization 2: GameTime modulo — skip 59 out of 60 ticks with zero computation.
+        // identityHashCode offset spreads multiple items across different ticks (load smoothing).
+        long gameTime = player.level().getGameTime();
+        int offset = System.identityHashCode(stack) & 0x3F; // 0..63
+        if ((gameTime + offset) % COOLDOWN_TICKS != 0) {
+            return; // cold-path: no NBT, no reflection, no capability call
         }
-        else {
-            setActive(stack, false);
-            if (getTime(stack) != COOLDOWN_TICKS) {
-                setTime(stack, COOLDOWN_TICKS);
+
+        // Optimization 3: Perform cross-mod thirst query only at the trigger tick
+        if (CompatManager.isPlayerThirsty(player)) {
+            setActiveDirty(stack, true);
+            CompatManager.quenchThirst(player);
+
+            // Optimization 4: Batch write — deduct full cycle's water and energy in one pass
+            setFluidStored(stack, getFluidStored(stack) - WATER_PER_CYCLE);
+            if (requireEnergy) {
+                setEnergyStored(stack, getEnergyStored(stack) - energyCostPerCycle);
             }
+        } else {
+            setActiveDirty(stack, false);
         }
     }
 
@@ -174,17 +168,15 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
         return InteractionResultHolder.pass(stack);
     }
 
-    private int getTime(ItemStack stack) {
-        CompoundTag tag = stack.getTag();
-        return tag != null && tag.contains(TAG_TIME) ? tag.getInt(TAG_TIME) : COOLDOWN_TICKS;
-    }
-
-    private void setTime(ItemStack stack, int time) {
-        stack.getOrCreateTag().putInt(TAG_TIME, time);
-    }
-
-    private void setActive(ItemStack stack, boolean active) {
-        stack.getOrCreateTag().putBoolean(TAG_ACTIVE, active);
+    /**
+     * Optimization 5: Dirty-check — only write to NBT when active state actually changes,
+     * eliminating unnecessary ClientboundContainerSetSlotPacket spam.
+     */
+    private void setActiveDirty(ItemStack stack, boolean active) {
+        CompoundTag tag = stack.getOrCreateTag();
+        if (tag.getBoolean(TAG_ACTIVE) != active) {
+            tag.putBoolean(TAG_ACTIVE, active);
+        }
     }
 
     public boolean isActive(ItemStack stack) {
@@ -194,7 +186,7 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
 
     @Override
     public boolean isFoil(ItemStack stack) {
-        return isActive(stack) && (!ModConfig.COMMON.requireEnergy.get() || getEnergyStored(stack) > ModConfig.COMMON.thirstQuencherRFPerTick.get());
+        return isActive(stack) && (!ModConfig.COMMON.requireEnergy.get() || getEnergyStored(stack) > 0);
     }
 
     @Override
@@ -224,14 +216,10 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
         LazyOptional<IFluidHandlerItem> fluidHolder = LazyOptional.of(() -> new IFluidHandlerItem() {
             @Nonnull
             @Override
-            public ItemStack getContainer() {
-                return stack;
-            }
+            public ItemStack getContainer() { return stack; }
 
             @Override
-            public int getTanks() {
-                return 1;
-            }
+            public int getTanks() { return 1; }
 
             @Nonnull
             @Override
@@ -240,9 +228,7 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
             }
 
             @Override
-            public int getTankCapacity(int tank) {
-                return getFluidCapacity();
-            }
+            public int getTankCapacity(int tank) { return getFluidCapacity(); }
 
             @Override
             public boolean isFluidValid(int tank, @Nonnull FluidStack resource) {
@@ -251,23 +237,17 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
 
             @Override
             public int fill(FluidStack resource, FluidAction action) {
-                if (resource.isEmpty() || resource.getFluid() != Fluids.WATER) {
-                    return 0;
-                }
+                if (resource.isEmpty() || resource.getFluid() != Fluids.WATER) return 0;
                 int stored = getFluidStored(stack);
                 int accepted = Math.min(getFluidCapacity() - stored, resource.getAmount());
-                if (action.execute() && accepted > 0) {
-                    setFluidStored(stack, stored + accepted);
-                }
+                if (action.execute() && accepted > 0) setFluidStored(stack, stored + accepted);
                 return accepted;
             }
 
             @Nonnull
             @Override
             public FluidStack drain(FluidStack resource, FluidAction action) {
-                if (resource.isEmpty() || resource.getFluid() != Fluids.WATER) {
-                    return FluidStack.EMPTY;
-                }
+                if (resource.isEmpty() || resource.getFluid() != Fluids.WATER) return FluidStack.EMPTY;
                 return drain(resource.getAmount(), action);
             }
 
@@ -276,9 +256,7 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
             public FluidStack drain(int maxDrain, FluidAction action) {
                 int stored = getFluidStored(stack);
                 int drained = Math.min(stored, maxDrain);
-                if (action.execute() && drained > 0) {
-                    setFluidStored(stack, stored - drained);
-                }
+                if (action.execute() && drained > 0) setFluidStored(stack, stored - drained);
                 return drained > 0 ? new FluidStack(Fluids.WATER, drained) : FluidStack.EMPTY;
             }
         });
@@ -291,17 +269,11 @@ public class ItemThirstQuencher extends ItemForgeEnergy {
             @Nonnull
             @Override
             public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
-                if (cap == ForgeCapabilities.ENERGY) {
-                    return energyProvider.getCapability(cap, side);
-                }
-                if (cap == ForgeCapabilities.FLUID_HANDLER_ITEM) {
-                    return fluidHolder.cast();
-                }
+                if (cap == ForgeCapabilities.ENERGY) return energyProvider.getCapability(cap, side);
+                if (cap == ForgeCapabilities.FLUID_HANDLER_ITEM) return fluidHolder.cast();
                 if (curioProvider != null) {
                     LazyOptional<T> curioCap = curioProvider.getCapability(cap, side);
-                    if (curioCap.isPresent()) {
-                        return curioCap;
-                    }
+                    if (curioCap.isPresent()) return curioCap;
                 }
                 return LazyOptional.empty();
             }
