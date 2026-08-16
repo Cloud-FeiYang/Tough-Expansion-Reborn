@@ -29,6 +29,41 @@
 
 ---
 
+## ⚙️ 配置文件 (Configuration)
+
+配置文件路径：  
+📂 `.minecraft/config/tanaddons-common.toml`
+
+```toml
+[general]
+    # 是否开启 FE 电能消耗需求（设为 false 则无需用电即可工作）
+    requireEnergy = true
+
+[portable_temp_regulator]
+    # 便携式温度调节器的最大 FE 储电量 (范围: 1000 ~ 100000000)
+    rfCapacity = 500000
+    # 处于调节状态时每 tick 消耗的 FE 基础能耗 (范围: 0 ~ 100000)
+    rfPerTick = 20
+
+[thirst_quencher]
+    # 止渴仪的最大 FE 储电量 (范围: 1000 ~ 100000000)
+    rfCapacity = 500000
+    # 处于止渴状态时每 tick 消耗的 FE 基础能耗 (范围: 0 ~ 100000)
+    rfPerTick = 20
+    # 内部最大储水量，单位 mB (默认 5000 = 5 桶水，范围: 1000 ~ 64000)
+    waterCapacity = 5000
+
+[temp_regulator_block]
+    # 温度调节器方块的最大 FE 储电量 (范围: 1000 ~ 100000000)
+    rfCapacity = 1000000
+    # 每调节一个玩家每 tick 消耗的 FE 基础能耗 (范围: 0 ~ 100000)
+    rfPerTick = 40
+    # 调节作用半径，以方块为中心 (范围: 1 ~ 64)
+    radius = 7
+```
+
+---
+
 ## 📜 开源协议
 
 本项目基于 **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)** 协议开源。  

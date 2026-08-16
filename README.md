@@ -29,6 +29,41 @@ Ported and enhanced from the original [Tough Expansion](https://github.com/p455w
 
 ---
 
+## ⚙️ Configuration
+
+Config file location:  
+📂 `.minecraft/config/tanaddons-common.toml`
+
+```toml
+[general]
+    # Whether temperature regulation and thirst quenching require Forge Energy
+    requireEnergy = true
+
+[portable_temp_regulator]
+    # FE storage capacity of the Portable Temperature Regulator (Range: 1000 ~ 100000000)
+    rfCapacity = 500000
+    # FE consumed per tick while regulating player temperature (Range: 0 ~ 100000)
+    rfPerTick = 20
+
+[thirst_quencher]
+    # FE storage capacity of the Thirst Quencher (Range: 1000 ~ 100000000)
+    rfCapacity = 500000
+    # FE consumed per tick while quenching player thirst (Range: 0 ~ 100000)
+    rfPerTick = 20
+    # Internal water storage capacity in mB (default 5000 = 5 buckets, Range: 1000 ~ 64000)
+    waterCapacity = 5000
+
+[temp_regulator_block]
+    # FE storage capacity of the Temperature Regulator block (Range: 1000 ~ 100000000)
+    rfCapacity = 1000000
+    # FE consumed per tick per player being regulated by the block (Range: 0 ~ 100000)
+    rfPerTick = 40
+    # Block radius within which players are regulated (Range: 1 ~ 64)
+    radius = 7
+```
+
+---
+
 ## 📜 License
 
 Distributed under the [GNU General Public License v3.0 (GPL-3.0)](LICENSE).  
