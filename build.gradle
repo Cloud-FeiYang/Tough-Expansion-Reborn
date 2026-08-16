@@ -86,7 +86,7 @@ tasks.named('processResources', ProcessResources).configure {
         loader_version_range   : '[47,)',
         mod_id                 : 'tanaddons',
         mod_name               : 'Tough Expansion',
-        mod_license            : 'MIT',
+        mod_license            : 'GPL-3.0-only',
         mod_version            : project.version,
         mod_authors            : 'p455w0rd, Ported to 1.20.1',
         mod_description        : 'Expands temperature regulation and thirst quenching in modern Minecraft.'
